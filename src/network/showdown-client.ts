@@ -165,9 +165,10 @@ export class ShowdownClient {
         }
 
         case 'pm': {
-          const sender = parts[2];
-          const receiver = parts[3];
+          const sender = parts[2] || '';
+          const receiver = parts[3] || '';
           const message = parts.slice(4).join('|');
+
           if (message.startsWith('/error')) {
             const errorText = message.replace('/error ', '');
             console.error(`\n[SHOWDOWN CHALLENGE ERROR] ${errorText}`);
@@ -176,19 +177,22 @@ export class ShowdownClient {
               console.log(`[ACTION REQUIRED TO PLAY LIVE]`);
               console.log(`Showdown's anti-spam filter blocks guest/unregistered accounts from`);
               console.log(`initiating outgoing challenges from this network.`);
-              console.log(``);
-              console.log(`TWO EASY WAYS TO PLAY:`);
-              console.log(`1. CHALLENGE FROM BROWSER (RECOMMENDED):`);
-              console.log(`   - Open https://play.pokemonshowdown.com in your browser.`);
-              console.log(`   - Log in as your player account (e.g. "${this.config.targetOpponent || 'taksehi'}").`);
-              console.log(`   - Click "Find a user" -> Search "${this.config.username.trim()}".`);
-              console.log(`   - Click "Challenge" -> Select "${this.config.format || '[Gen 9] Random Battle'}".`);
-              console.log(`   - This bot will AUTOMATICALLY ACCEPT your challenge and battle you!`);
-              console.log(``);
-              console.log(`2. USE A REGISTERED ACCOUNT FOR THE BOT:`);
-              console.log(`   - Pass your bot's password via environment variable:`);
-              console.log(`     SHOWDOWN_PASSWORD="your_password" npm run live ${this.config.username} ${this.config.targetOpponent || ''}`);
               console.log(`------------------------------------------------------------\n`);
+            }
+          } else if (message.startsWith('/challenge')) {
+            // |pm| taksehi|!AIBot_Alpha|/challenge gen2randombattle|gen2randombattle|||
+            const cleanSender = sender.trim().replace(/^[^a-zA-Z0-9]+/, '');
+            const challengeParts = message.slice('/challenge '.length).split('|');
+            const format = challengeParts[0]?.trim() || this.config.format || 'gen9randombattle';
+
+            console.log(`\n============================================================`);
+            console.log(`[CHALLENGE RECEIVED] Incoming battle challenge from "${cleanSender}"!`);
+            console.log(`                      Format: "${format}"`);
+            console.log(`============================================================\n`);
+
+            if (this.config.autoAcceptChallenges) {
+              console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${cleanSender}"...`);
+              this.send(`|/accept ${cleanSender}`);
             }
           } else {
             console.log(`[PM] [${sender} -> ${receiver}]: ${message}`);
@@ -213,10 +217,11 @@ export class ShowdownClient {
             const challenges = JSON.parse(parts[2]);
             if (challenges.challengesFrom) {
               for (const [challenger, format] of Object.entries(challenges.challengesFrom)) {
-                console.log(`[CHALLENGE RECEIVED] Incoming challenge from "${challenger}" (${format})`);
+                const cleanChallenger = challenger.trim().replace(/^[^a-zA-Z0-9]+/, '');
+                console.log(`[CHALLENGE RECEIVED] Incoming challenge from "${cleanChallenger}" (${format})`);
                 if (this.config.autoAcceptChallenges) {
-                  console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${challenger}"...`);
-                  this.send(`|/accept ${challenger}`);
+                  console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${cleanChallenger}"...`);
+                  this.send(`|/accept ${cleanChallenger}`);
                 }
               }
             }
@@ -229,10 +234,12 @@ export class ShowdownClient {
 
         case 'init': {
           if (parts[2] === 'battle') {
+            const formatMatch = roomId.match(/^battle-([a-z0-9]+)-/);
+            const roomFormat = formatMatch ? formatMatch[1] : (this.config.format || 'gen9randombattle');
             console.log(`\n============================================================`);
-            console.log(`[BATTLE INIT] Joined battle room: ${roomId}`);
+            console.log(`[BATTLE INIT] Joined battle room: ${roomId} (Format: ${roomFormat})`);
             console.log(`============================================================\n`);
-            this.trackerMap.set(roomId, new StateTracker(this.config.format || 'gen9randombattle'));
+            this.trackerMap.set(roomId, new StateTracker(roomFormat));
           }
           break;
         }
@@ -346,7 +353,9 @@ export class ShowdownClient {
 
       let tracker = this.trackerMap.get(roomId);
       if (!tracker) {
-        tracker = new StateTracker(this.config.format || 'gen9randombattle');
+        const formatMatch = roomId.match(/^battle-([a-z0-9]+)-/);
+        const roomFormat = formatMatch ? formatMatch[1] : (this.config.format || 'gen9randombattle');
+        tracker = new StateTracker(roomFormat);
         this.trackerMap.set(roomId, tracker);
       }
 
