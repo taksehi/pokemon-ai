@@ -11,18 +11,23 @@ process.on('unhandledRejection', reason => {
 });
 
 async function main() {
-  const username = process.env.SHOWDOWN_USERNAME || process.argv[2] || `AI_Bot_${Math.floor(Math.random() * 10000)}`;
+  const positionalArgs = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
+  const username = process.env.SHOWDOWN_USERNAME || positionalArgs[0] || `AI_Bot_${Math.floor(Math.random() * 10000)}`;
   const password = process.env.SHOWDOWN_PASSWORD || '';
   const isLadder = process.argv.includes('--ladder') || process.env.SHOWDOWN_LADDER === 'true';
   const exitOnFinish = process.argv.includes('--exit-on-finish') || process.env.SHOWDOWN_EXIT_ON_FINISH === 'true';
-  const targetOpponent = isLadder ? undefined : (process.env.SHOWDOWN_OPPONENT || (process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : undefined));
+  const targetOpponent = isLadder ? undefined : (process.env.SHOWDOWN_OPPONENT || positionalArgs[1]);
   const formatArg = process.argv.find(arg => arg.startsWith('--format='));
   const isGen2 = process.argv.includes('--gen2');
   const format =
     process.env.SHOWDOWN_FORMAT ||
     (formatArg ? formatArg.split('=')[1] : isGen2 ? 'gen2randombattle' : 'gen9randombattle');
   const serverUrl = process.env.SHOWDOWN_SERVER || 'wss://sim3.psim.us/showdown/websocket';
-  const mode = process.env.AI_MODE || 'baseline';
+  const mode = process.argv.includes('--jev')
+    ? 'jev'
+    : process.argv.includes('--ollama')
+    ? 'ollama'
+    : process.env.AI_MODE || 'baseline';
 
   let llmClient;
   if (mode === 'jev') {

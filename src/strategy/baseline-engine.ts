@@ -85,6 +85,39 @@ export class BaselineEngine {
         }
       }
 
+      // Healing moves (essential across all gens, especially GSC Gen 2)
+      if (['recover', 'roost', 'slackoff', 'softboiled', 'milkdrink', 'rest', 'synthesis', 'morningsun', 'moonlight', 'strengthsap', 'wish'].includes(moveId)) {
+        if (state.p1.active) {
+          if (state.p1.active.hpPercent < 50) {
+            score += 65;
+            breakdown.push(`Critical recovery at low HP (<50%): +65`);
+          } else if (state.p1.active.hpPercent < 75) {
+            score += 30;
+            breakdown.push(`Sustain recovery at medium HP (<75%): +30`);
+          }
+        }
+      }
+
+      // Crippling status affliction
+      if (['willowisp', 'thunderwave', 'toxic', 'glare', 'spore', 'sleeppowder', 'yawn'].includes(moveId)) {
+        if (state.p2.active && !state.p2.active.status) {
+          score += 40;
+          breakdown.push(`Inflict crippling status condition: +40`);
+        }
+      }
+
+      // Entry hazard removal
+      if (['rapidspin', 'defog', 'mortalspin', 'courtchange'].includes(moveId)) {
+        const hazardCount =
+          (state.field.p1Hazards.stealthRock ? 1 : 0) +
+          state.field.p1Hazards.spikes +
+          state.field.p1Hazards.toxicSpikes;
+        if (hazardCount > 0) {
+          score += hazardCount * 25;
+          breakdown.push(`Hazard removal (${hazardCount} hazards): +${hazardCount * 25}`);
+        }
+      }
+
       // 5. Terastallization penalty (conserve Tera unless it secures high damage / KO)
       if (candidate.terastallize) {
         if (evalData.koProbability > 0.5) {

@@ -149,6 +149,39 @@ export class StateTracker {
         break;
       }
 
+      case '-status': {
+        // |-status|p1a: Snorlax|slp
+        const slot = parts[1];
+        const status = parts[2];
+        if (this.isPlayerSlot(slot) && this.state.p1.active) {
+          this.state.p1.active.status = status;
+        } else if (this.isOpponentSlot(slot) && this.state.p2.active) {
+          this.state.p2.active.status = status;
+        }
+        break;
+      }
+
+      case '-curestatus': {
+        // |-curestatus|p1a: Snorlax|slp
+        const slot = parts[1];
+        if (this.isPlayerSlot(slot) && this.state.p1.active) {
+          this.state.p1.active.status = null;
+        } else if (this.isOpponentSlot(slot) && this.state.p2.active) {
+          this.state.p2.active.status = null;
+        }
+        break;
+      }
+
+      case 'replace': {
+        // |replace|p2a: Zoroark|Zoroark, L80, M
+        const slot = parts[1];
+        const details = this.parseDetails(parts[2] || '');
+        if (this.isOpponentSlot(slot) && this.state.p2.active) {
+          this.state.p2.active.species = details.species;
+        }
+        break;
+      }
+
       case '-boost': {
         // |-boost|p2a: Dondozo|atk|1
         const slot = parts[1];
@@ -164,6 +197,18 @@ export class StateTracker {
         const stat = parts[2] as keyof BoostTable;
         const amount = parseInt(parts[3], 10) || 1;
         this.applyBoost(slot, stat, -amount);
+        break;
+      }
+
+      case '-setboost': {
+        // |-setboost|p1a: Snorlax|atk|6
+        const slot = parts[1];
+        const stat = parts[2] as keyof BoostTable;
+        const amount = parseInt(parts[3], 10) || 0;
+        const active = this.isPlayerSlot(slot) ? this.state.p1.active : this.state.p2.active;
+        if (active && stat in active.boosts) {
+          active.boosts[stat] = Math.max(-6, Math.min(6, amount));
+        }
         break;
       }
 
