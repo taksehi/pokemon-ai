@@ -150,4 +150,59 @@ describe('Loop 3: CandidateGenerator & Deterministic Damage Evaluation', () => {
 
     expect(tracker.state.turn).toBeGreaterThanOrEqual(2);
   });
+
+  it('should deterministically calculate Gen 2 damage and mechanics for Snorlax vs Zapdos in gen2ou', () => {
+    const tracker = new StateTracker('gen2ou');
+
+    const lines = [
+      '|player|p1|Red|',
+      '|player|p2|Blue|',
+      '|turn|1',
+      '|switch|p1a: Snorlax|Snorlax, L100|523/523',
+      '|switch|p2a: Zapdos|Zapdos, L100|100/100'
+    ];
+    tracker.processLines(lines);
+
+    const request: RequestPayload = {
+      rqid: 1,
+      active: [
+        {
+          moves: [
+            { move: 'Double-Edge', id: 'doubleedge', pp: 24, maxpp: 24, target: 'normal', disabled: false },
+            { move: 'Body Slam', id: 'bodyslam', pp: 24, maxpp: 24, target: 'normal', disabled: false },
+            { move: 'Rest', id: 'rest', pp: 16, maxpp: 16, target: 'self', disabled: false },
+            { move: 'Curse', id: 'curse', pp: 16, maxpp: 16, target: 'self', disabled: false }
+          ]
+        }
+      ],
+      side: {
+        name: 'Red',
+        id: 'p1',
+        pokemon: [
+          {
+            ident: 'p1: Snorlax',
+            details: 'Snorlax, L100',
+            condition: '523/523',
+            active: true,
+            stats: { atk: 318, def: 228, spa: 228, spd: 318, spe: 158 },
+            moves: ['doubleedge', 'bodyslam', 'rest', 'curse'],
+            baseAbility: '',
+            item: 'leftovers',
+            pokeball: 'pokeball'
+          }
+        ]
+      }
+    };
+
+    const candidates = CandidateGenerator.generateCandidates(tracker.state, request);
+    expect(candidates.length).toBe(4);
+
+    const deCandidate = candidates.find(c => c.choice === 'doubleedge');
+    expect(deCandidate).toBeDefined();
+    // In Gen 2, Snorlax Double-Edge deals ~38-46% to Zapdos
+    expect(deCandidate!.evaluation.minDamagePercent).toBeGreaterThan(30);
+    expect(deCandidate!.evaluation.maxDamagePercent).toBeLessThan(60);
+    // Terastallize should be false in Gen 2
+    expect(deCandidate!.terastallize).toBe(false);
+  });
 });

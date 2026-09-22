@@ -16,7 +16,11 @@ async function main() {
   const isLadder = process.argv.includes('--ladder') || process.env.SHOWDOWN_LADDER === 'true';
   const exitOnFinish = process.argv.includes('--exit-on-finish') || process.env.SHOWDOWN_EXIT_ON_FINISH === 'true';
   const targetOpponent = isLadder ? undefined : (process.env.SHOWDOWN_OPPONENT || (process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : undefined));
-  const format = process.env.SHOWDOWN_FORMAT || 'gen9randombattle';
+  const formatArg = process.argv.find(arg => arg.startsWith('--format='));
+  const isGen2 = process.argv.includes('--gen2');
+  const format =
+    process.env.SHOWDOWN_FORMAT ||
+    (formatArg ? formatArg.split('=')[1] : isGen2 ? 'gen2randombattle' : 'gen9randombattle');
   const serverUrl = process.env.SHOWDOWN_SERVER || 'wss://sim3.psim.us/showdown/websocket';
   const mode = process.env.AI_MODE || 'baseline';
 

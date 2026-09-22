@@ -3,8 +3,12 @@ import { Generations, Pokemon as CalcPokemon, Move as CalcMove, calculate } from
 import { BattleState, BoostTable } from '../battle/battle-state.js';
 import { RequestPayload } from '../sim/battle-runner.js';
 
-const gen9 = Generations.get(9);
-const dexGen9 = Dex.forGen(9);
+function getGenNumber(format?: string): 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 {
+  if (!format) return 9;
+  const match = format.match(/^gen(\d+)/i);
+  const n = match ? parseInt(match[1], 10) : 9;
+  return (n >= 1 && n <= 9 ? n : 9) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+}
 
 export interface CandidateEvaluation {
   minDamagePercent: number;
@@ -61,7 +65,7 @@ export class CandidateGenerator {
           evaluation: normalEval
         });
 
-        // Terastallize move candidate (if available)
+        // Terastallized variant (if mechanic is available in current gen and active pokemon can tera)
         if (canTera) {
           const teraEval = this.evaluateMove(state, m.id, true);
           candidates.push({
@@ -77,15 +81,14 @@ export class CandidateGenerator {
       });
     }
 
-    // 2. Generate Switch Candidates
+    // 2. Generate Switch Candidates (if forced or optional switches are legal)
     if (request.side && request.side.pokemon) {
       request.side.pokemon.forEach((p, idx) => {
         const slot = idx + 1;
-        // Cannot switch into currently active Pokémon or fainted Pokémon
-        if (p.active) return;
-        if (p.condition.endsWith(' fnt') || p.condition === '0 fnt') return;
+        // Can't switch into currently active Pokémon or fainted Pokémon
+        if (p.active || p.condition.endsWith('fnt') || p.condition === '0 fnt') return;
 
-        const switchEval = this.evaluateSwitch(state, p.ident, slot);
+        const switchEval = this.evaluateSwitch(state, p.ident);
         const speciesName = p.details.split(',')[0].trim();
 
         candidates.push({
@@ -110,7 +113,11 @@ export class CandidateGenerator {
     const p1Active = state.p1.active;
     const p2Active = state.p2.active;
 
-    const dexMove = dexGen9.moves.get(moveId);
+    const genNum = getGenNumber(state.format);
+    const gen = Generations.get(genNum);
+    const dex = Dex.forGen(genNum);
+
+    const dexMove = dex.moves.get(moveId);
     const priority = dexMove?.priority ?? 0;
 
     let minDamagePercent = 0;
@@ -133,7 +140,7 @@ export class CandidateGenerator {
     // Speed calculation
     const p1Speed = this.calculateEffectiveSpeed(p1Active.stats.spe, p1Active.boosts.spe);
     // In random battles or standard formats, approximate opponent speed
-    const oppBaseSpeed = dexGen9.species.get(p2Active.species)?.baseStats.spe || 100;
+    const oppBaseSpeed = dex.species.get(p2Active.species)?.baseStats.spe || 100;
     const oppApproxSpeed = this.calculateEffectiveSpeed(
       Math.floor(((2 * oppBaseSpeed + 31 + 21) * p2Active.level) / 100 + 5),
       p2Active.boosts.spe
@@ -152,13 +159,13 @@ export class CandidateGenerator {
     // Damage calculation if damaging move
     if (dexMove && dexMove.category !== 'Status' && (dexMove.basePower > 0 || dexMove.basePowerCallback)) {
       try {
-        const attackerItem = p1Active.item ? dexGen9.items.get(p1Active.item)?.name || p1Active.item : undefined;
-        const attackerAbility = p1Active.ability ? dexGen9.abilities.get(p1Active.ability)?.name || p1Active.ability : undefined;
+        const attackerItem = p1Active.item ? dex.items.get(p1Active.item)?.name || p1Active.item : undefined;
+        const attackerAbility = p1Active.ability ? dex.abilities.get(p1Active.ability)?.name || p1Active.ability : undefined;
 
-        const defenderItem = p2Active.revealedItem ? dexGen9.items.get(p2Active.revealedItem)?.name || p2Active.revealedItem : undefined;
-        const defenderAbility = p2Active.revealedAbility ? dexGen9.abilities.get(p2Active.revealedAbility)?.name || p2Active.revealedAbility : undefined;
+        const defenderItem = p2Active.revealedItem ? dex.items.get(p2Active.revealedItem)?.name || p2Active.revealedItem : undefined;
+        const defenderAbility = p2Active.revealedAbility ? dex.abilities.get(p2Active.revealedAbility)?.name || p2Active.revealedAbility : undefined;
 
-        const attacker = new CalcPokemon(gen9, p1Active.species, {
+        const attacker = new CalcPokemon(gen, p1Active.species, {
           level: p1Active.level,
           item: attackerItem,
           ability: attackerAbility,
@@ -172,7 +179,7 @@ export class CandidateGenerator {
           teraType: isTerastallizing && p1Active.teraType ? (p1Active.teraType as any) : undefined
         });
 
-        const defender = new CalcPokemon(gen9, p2Active.species, {
+        const defender = new CalcPokemon(gen, p2Active.species, {
           level: p2Active.level,
           item: defenderItem,
           ability: defenderAbility,
@@ -186,8 +193,8 @@ export class CandidateGenerator {
           teraType: p2Active.terastallized && p2Active.teraType ? (p2Active.teraType as any) : undefined
         });
 
-        const calcMove = new CalcMove(gen9, dexMove.name);
-        const result = calculate(gen9, attacker, defender, calcMove);
+        const calcMove = new CalcMove(gen, dexMove.name);
+        const result = calculate(gen, attacker, defender, calcMove);
 
         const range = result.range();
         const defenderMaxHp = defender.maxHP();
@@ -213,8 +220,8 @@ export class CandidateGenerator {
     const speedDesc = outspeeds === true ? 'We outspeed' : outspeeds === false ? 'Slower' : 'Speed tie';
     const damageDesc =
       maxDamagePercent > 0
-        ? `${minDamagePercent}% - ${maxDamagePercent}% (KO chance: ${Math.round(koProbability * 100)}%)`
-        : 'Status / 0 dmg';
+        ? `Damage: ${minDamagePercent}%-${maxDamagePercent}% (KO: ${Math.round(koProbability * 100)}%)`
+        : 'Status move';
 
     return {
       minDamagePercent,
@@ -223,17 +230,18 @@ export class CandidateGenerator {
       outspeeds,
       priority,
       hazardDamagePercent: 0,
-      description: `${dexMove?.name || moveId}: ${damageDesc} [${speedDesc}]`
+      description: `${dexMove?.name || moveId} | ${damageDesc} | ${speedDesc} (Pri: ${priority})`
     };
   }
 
   private static evaluateSwitch(
     state: BattleState,
-    ident: string,
-    slot: number
+    ident: string
   ): CandidateEvaluation {
-    const p1Mon = state.p1.team.find(p => p.ident === ident || p.species === ident.split(':').pop()?.trim());
     const hazards = state.field.p1Hazards;
+    const p1Mon = state.p1.team.find(p => p.ident === ident);
+    const genNum = getGenNumber(state.format);
+    const dex = Dex.forGen(genNum);
 
     let hazardDamagePercent = 0;
 
@@ -242,14 +250,14 @@ export class CandidateGenerator {
       if (!hasBoots) {
         // Stealth Rock calculation based on Rock effectiveness
         if (hazards.stealthRock) {
-          const rockEffectiveness = this.getRockEffectiveness(p1Mon.species);
+          const rockEffectiveness = this.getRockEffectiveness(p1Mon.species, dex);
           hazardDamagePercent += 12.5 * rockEffectiveness;
         }
-        // Spikes calculation
+        // Spikes calculation (Gen 2: 1 layer = 12.5%; Gen 3+: 1=12.5%, 2=16.6%, 3=25%)
         if (hazards.spikes > 0) {
-          const isGrounded = this.isGrounded(p1Mon.species);
+          const isGrounded = this.isGrounded(p1Mon.species, dex);
           if (isGrounded) {
-            const spikeDmg = hazards.spikes === 1 ? 12.5 : hazards.spikes === 2 ? 16.6 : 25;
+            const spikeDmg = genNum === 2 ? 12.5 : (hazards.spikes === 1 ? 12.5 : hazards.spikes === 2 ? 16.6 : 25);
             hazardDamagePercent += spikeDmg;
           }
         }
@@ -287,13 +295,13 @@ export class CandidateGenerator {
     return Math.floor(baseSpeed * multiplier);
   }
 
-  private static getRockEffectiveness(speciesName: string): number {
-    const species = dexGen9.species.get(speciesName);
+  private static getRockEffectiveness(speciesName: string, dex: ReturnType<typeof Dex.forGen>): number {
+    const species = dex.species.get(speciesName);
     if (!species) return 1.0;
 
     let mult = 1.0;
     for (const type of species.types) {
-      const typeData = dexGen9.types.get(type);
+      const typeData = dex.types.get(type);
       if (typeData && typeData.damageTaken) {
         // In Showdown damageTaken: 1 = weak (2x), 2 = resist (0.5x), 3 = immune (0x), 0 = neutral (1x)
         const dt = typeData.damageTaken['Rock'];
@@ -305,8 +313,8 @@ export class CandidateGenerator {
     return mult;
   }
 
-  private static isGrounded(speciesName: string): boolean {
-    const species = dexGen9.species.get(speciesName);
+  private static isGrounded(speciesName: string, dex: ReturnType<typeof Dex.forGen>): boolean {
+    const species = dex.species.get(speciesName);
     if (!species) return true;
     if (species.types.includes('Flying')) return false;
     return true;
