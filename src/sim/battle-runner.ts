@@ -205,4 +205,19 @@ export class BattleRunner {
     const cmd = choice.startsWith('choose ') ? choice.slice(7) : choice;
     await this.streams.p2.write(cmd);
   }
+
+  /**
+   * Destroys and cleans up streams and internal state.
+   */
+  public destroy(): void {
+    try {
+      this.p1Iterator = null;
+      (this.streams.p1 as any).destroy?.();
+      (this.streams.p2 as any).destroy?.();
+      (this.streams.omniscient as any).destroy?.();
+      this.accumulatedLines = [];
+      this.lastRequest = null;
+    } catch {}
+  }
 }
+

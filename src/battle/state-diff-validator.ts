@@ -117,27 +117,39 @@ export class StateDiffValidator {
       diffs.push(`P2 Spikes: ${stateBefore.field.p2Hazards.spikes} -> ${stateAfter.field.p2Hazards.spikes}`);
     }
 
-    // Protocol event consistency checks
-    for (const rawLine of rawLines) {
-      const parts = rawLine.trim().split('|').slice(1);
-      const cmd = parts[0];
+    // Protocol event consistency checks (evaluate against the final event of each type in the turn)
+    const lastWeatherLine = [...rawLines].reverse().find(l => l.trim().startsWith('|-weather|'));
+    if (lastWeatherLine) {
+      const parts = lastWeatherLine.trim().split('|').slice(1);
+      const expected = parts[1] === 'none' ? null : parts[1];
+      if (stateAfter.field.weather !== expected) {
+        errors.push(`Weather state mismatch: expected ${expected}, got ${stateAfter.field.weather}`);
+      }
+    }
 
-      if (cmd === '-weather') {
-        const expected = parts[1] === 'none' ? null : parts[1];
-        if (stateAfter.field.weather !== expected) {
-          errors.push(`Weather state mismatch: expected ${expected}, got ${stateAfter.field.weather}`);
+    const lastTerrainLine = [...rawLines].reverse().find(
+      l => l.trim().startsWith('|-fieldstart|') || l.trim().startsWith('|-fieldend|')
+    );
+    if (lastTerrainLine) {
+      const trimmed = lastTerrainLine.trim();
+      if (trimmed.startsWith('|-fieldstart|')) {
+        const parts = trimmed.split('|').slice(1);
+        if (parts[1]?.includes('Terrain')) {
+          const expected = parts[1].replace('move: ', '');
+          if (stateAfter.field.terrain !== expected) {
+            errors.push(`Terrain state mismatch: expected ${expected}, got ${stateAfter.field.terrain}`);
+          }
         }
-      } else if (cmd === '-fieldstart' && parts[1]?.includes('Terrain')) {
-        const expected = parts[1].replace('move: ', '');
-        if (stateAfter.field.terrain !== expected) {
-          errors.push(`Terrain state mismatch: expected ${expected}, got ${stateAfter.field.terrain}`);
-        }
-      } else if (cmd === '-fieldend' && parts[1]?.includes('Terrain')) {
-        if (stateAfter.field.terrain !== null) {
-          errors.push(`Terrain state mismatch: expected null, got ${stateAfter.field.terrain}`);
+      } else if (trimmed.startsWith('|-fieldend|')) {
+        const parts = trimmed.split('|').slice(1);
+        if (parts[1]?.includes('Terrain')) {
+          if (stateAfter.field.terrain !== null) {
+            errors.push(`Terrain state mismatch: expected null, got ${stateAfter.field.terrain}`);
+          }
         }
       }
     }
+
 
     return {
       turn,
