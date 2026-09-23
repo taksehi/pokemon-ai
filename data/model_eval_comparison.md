@@ -1,6 +1,6 @@
 # Model Evaluation & Head-to-Head Comparison Report
 
-- **Timestamp:** 2026-09-23T08:16:06.995Z
+- **Timestamp:** 2026-09-23T08:20:11.176Z
 - **Seed Policy:** Mirrored Pairwise Fixed-Seed (Loop 5 Compliant)
 - **Held-Out Seed Range:** 990000 - 990000
 - **Total Battles:** 2
