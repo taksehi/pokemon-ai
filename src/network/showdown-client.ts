@@ -5,6 +5,8 @@ import { AIStrategyPlayer } from '../ai/strategy-player.js';
 import { LLMClient, MockLLMClient } from '../ai/llm-client.js';
 import { BattleLogger } from '../utils/battle-logger.js';
 import { RequestPayload } from '../sim/battle-runner.js';
+import { NeuralEngine } from '../strategy/neural-engine.js';
+import { ModelRegistry } from '../model/model-registry.js';
 
 export interface ShowdownClientConfig {
   serverUrl?: string; // default: wss://sim3.psim.us/showdown/websocket
@@ -228,7 +230,7 @@ export class ShowdownClient {
                 console.log(`[CHALLENGE RECEIVED] Incoming challenge from "${cleanChallenger}" (${format})`);
                 if (this.config.autoAcceptChallenges) {
                   console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${cleanChallenger}"...`);
-                  this.send('|/search none');
+                  this.send('|/cancelsearch');
                   this.send(`|/accept ${cleanChallenger}`);
                 }
               }
@@ -249,7 +251,7 @@ export class ShowdownClient {
             console.log(`============================================================\n`);
             this.trackerMap.set(roomId, new StateTracker(roomFormat));
             // Stop any ongoing ladder search immediately upon joining a battle room
-            this.send('|/search none');
+            this.send('|/cancelsearch');
           }
           break;
         }
@@ -392,9 +394,16 @@ export class ShowdownClient {
         candidateId = decision.candidate.id;
         rationale = decision.rationale;
       } else {
-        const best = BaselineEngine.selectBestAction(tracker.state, request);
-        candidateId = best.candidate.id;
-        rationale = `[BASELINE] Score: ${best.score} | Breakdown: [${best.breakdown.join('; ')}]`;
+        try {
+          const active = ModelRegistry.getActiveModel();
+          const best = NeuralEngine.selectBestAction(active.model, tracker.state, request);
+          candidateId = best.candidate.id;
+          rationale = `[NEURAL MODEL ${active.version}] Score: ${best.score.toFixed(1)} | Breakdown: [${best.breakdown.join('; ')}]`;
+        } catch {
+          const best = BaselineEngine.selectBestAction(tracker.state, request);
+          candidateId = best.candidate.id;
+          rationale = `[BASELINE] Score: ${best.score} | Breakdown: [${best.breakdown.join('; ')}]`;
+        }
       }
 
       console.log(`[ACTION] Room: ${roomId} -> "${candidateId}" (rqid: ${request.rqid})`);
