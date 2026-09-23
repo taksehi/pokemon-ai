@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-23T08:16:06.995Z",
+  "formatid": "gen9randombattle",
+  "oldModelVersion": "v0",
+  "oldModelPath": "D:\\pokemon-ai\\data\\models\\model_v0.json",
+  "newModelVersion": "v1",
+  "newModelPath": "D:\\pokemon-ai\\data\\models\\model_v1.json",
+  "totalBattles": 2,
+  "newModelWins": 1,
+  "oldModelWins": 1,
+  "draws": 0,
+  "newModelWinRate": 50,
+  "oldModelWinRate": 50,
+  "winRateDelta": 0,
+  "thresholdWinRate": 100,
+  "decision": "REJECT",
+  "activeModelPointerBefore": "v0",
+  "activeModelPointerAfter": "v0",
+  "seedPolicy": "Mirrored Pairwise Fixed-Seed (Loop 5 Compliant)",
+  "heldOutSeedRange": "990000 - 990000"
+}

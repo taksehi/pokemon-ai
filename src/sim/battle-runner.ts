@@ -84,6 +84,7 @@ export class BattleRunner {
     p2Team?: string;
     seed?: [number, number, number, number];
     autoOpponent?: boolean;
+    p2Controller?: (req: RequestPayload, rawLines: string[]) => Promise<string> | string;
   } = {}): Promise<void> {
     const formatid = options.formatid ?? 'gen9randombattle';
     const p1Name = options.p1Name ?? 'Alice_AI';
@@ -120,7 +121,31 @@ export class BattleRunner {
     await this.streams.omniscient.write(startCommands);
     this.p1Iterator = this.streams.p1[Symbol.asyncIterator]();
 
-    if (options.autoOpponent) {
+    if (options.p2Controller) {
+      (async () => {
+        try {
+          const p2Lines: string[] = [];
+          for await (const chunk of this.streams.p2) {
+            for (const line of chunk.split('\n')) {
+              if (line.trim()) p2Lines.push(line);
+              if (line.startsWith('|request|')) {
+                const jsonStr = line.slice('|request|'.length).trim();
+                if (jsonStr) {
+                  const req = JSON.parse(jsonStr);
+                  if (!req.wait && (req.active || req.forceSwitch)) {
+                    const action = await options.p2Controller!(req, [...p2Lines]);
+                    p2Lines.length = 0;
+                    await this.streams.p2.write(action);
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // Stream completed or closed
+        }
+      })();
+    } else if (options.autoOpponent) {
       (async () => {
         try {
           for await (const chunk of this.streams.p2) {
