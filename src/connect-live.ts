@@ -2,6 +2,12 @@ import { ShowdownClient } from './network/showdown-client.js';
 import { JevClient } from './ai/jev-client.js';
 import { OllamaClient } from './ai/llm-client.js';
 
+try {
+  (process as any).loadEnvFile?.();
+} catch {
+  // Ignore if .env is missing or invalid
+}
+
 process.on('uncaughtException', err => {
   console.error('[UNCAUGHT EXCEPTION]', err);
 });

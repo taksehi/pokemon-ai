@@ -7,6 +7,12 @@ import { MockLLMClient, OllamaClient, LLMClient } from './ai/llm-client.js';
 import { JevClient } from './ai/jev-client.js';
 import { BattleLogger } from './utils/battle-logger.js';
 
+try {
+  (process as any).loadEnvFile?.();
+} catch {
+  // Ignore if .env is missing or invalid
+}
+
 export interface BattleResult {
   winner: string;
   totalTurns: number;
