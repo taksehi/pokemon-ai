@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "live": "tsx src/connect-live.ts",
+    "autonomous": "tsx src/autonomous-runner.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc"
