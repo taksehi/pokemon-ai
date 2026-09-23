@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BaselineEngine } from '../src/strategy/baseline-engine.js';
+import { CandidateGenerator } from '../src/strategy/candidate-generator.js';
 import { StateTracker } from '../src/battle/state-tracker.js';
 import { BattleRunner, RequestPayload } from '../src/sim/battle-runner.js';
 import { BattleLogger } from '../src/utils/battle-logger.js';
@@ -110,5 +111,123 @@ describe('Loop 4: Deterministic Baseline Engine', () => {
     // Verify instrumentation log works on final state
     const log = BattleLogger.formatState(tracker.state);
     expect(log).toContain('[OBSERVE]');
+  });
+
+  it('should prefer safe defensive pivoting or priority over clicking a slow attack under lethal KO threat', () => {
+    const tracker = new StateTracker('gen9ou');
+
+    // Alice has frail Gengar at 25% HP facing outspeeding Dragapult with Shadow Ball
+    const lines = [
+      '|player|p1|Alice|',
+      '|player|p2|Bob|',
+      '|turn|1',
+      '|switch|p1a: Gengar|Gengar, L100, M|25/100',
+      '|switch|p2a: Dragapult|Dragapult, L100, M|100/100',
+      '|move|p2a: Dragapult|Shadow Ball|p1a: Gengar|[still]'
+    ];
+    tracker.processLines(lines);
+
+    const request: RequestPayload = {
+      rqid: 2,
+      active: [
+        {
+          moves: [
+            { move: 'Sludge Bomb', id: 'sludgebomb', pp: 16, maxpp: 16, target: 'normal', disabled: false },
+            { move: 'Sucker Punch', id: 'suckerpunch', pp: 8, maxpp: 8, target: 'normal', disabled: false }
+          ]
+        }
+      ],
+      side: {
+        name: 'Alice',
+        id: 'p1',
+        pokemon: [
+          {
+            ident: 'p1: Gengar',
+            details: 'Gengar, L100, M',
+            condition: '25/100',
+            active: true,
+            stats: { atk: 149, def: 156, spa: 359, spd: 186, spe: 319 },
+            moves: ['sludgebomb', 'suckerpunch'],
+            baseAbility: 'cursedbody',
+            item: '',
+            pokeball: 'pokeball'
+          },
+          {
+            ident: 'p1: Ting-Lu',
+            details: 'Ting-Lu, L100',
+            condition: '100/100',
+            active: false,
+            stats: { atk: 256, def: 286, spa: 120, spd: 260, spe: 126 },
+            moves: ['earthquake'],
+            baseAbility: 'vesselofruin',
+            item: 'leftovers',
+            pokeball: 'pokeball'
+          }
+        ]
+      }
+    };
+
+    tracker.updateFromRequest(request);
+
+    const bestChoice = BaselineEngine.selectBestAction(tracker.state, request);
+
+    // Ting-Lu is Dark/Ground (resists Ghost) and has massive bulk.
+    // The engine should either switch to Ting-Lu or use priority Sucker Punch, but NEVER click slow Sludge Bomb!
+    expect(['switch 2', 'move 2']).toContain(bestChoice.candidate.id);
+    expect(bestChoice.candidate.id).not.toBe('move 1');
+  });
+
+  it('should penalize status moves used into immune types', () => {
+    const tracker = new StateTracker('gen9ou');
+
+    // Opponent is Great Tusk (Ground / Fighting)
+    const lines = [
+      '|player|p1|Alice|',
+      '|player|p2|Bob|',
+      '|turn|1',
+      '|switch|p1a: Zapdos|Zapdos, L100|100/100',
+      '|switch|p2a: Great Tusk|Great Tusk, L100|100/100'
+    ];
+    tracker.processLines(lines);
+
+    const request: RequestPayload = {
+      rqid: 1,
+      active: [
+        {
+          moves: [
+            { move: 'Thunder Wave', id: 'thunderwave', pp: 32, maxpp: 32, target: 'normal', disabled: false },
+            { move: 'Hurricane', id: 'hurricane', pp: 16, maxpp: 16, target: 'normal', disabled: false }
+          ]
+        }
+      ],
+      side: {
+        name: 'Alice',
+        id: 'p1',
+        pokemon: [
+          {
+            ident: 'p1: Zapdos',
+            details: 'Zapdos, L100',
+            condition: '100/100',
+            active: true,
+            stats: { atk: 194, def: 206, spa: 349, spd: 216, spe: 299 },
+            moves: ['thunderwave', 'hurricane'],
+            baseAbility: 'static',
+            item: 'heavydutyboots',
+            pokeball: 'pokeball'
+          }
+        ]
+      }
+    };
+
+    tracker.updateFromRequest(request);
+
+    const candidates = CandidateGenerator.generateCandidates(tracker.state, request);
+    const twScored = BaselineEngine.scoreCandidate(tracker.state, request, candidates.find(c => c.choice === 'thunderwave')!);
+    const hurrScored = BaselineEngine.scoreCandidate(tracker.state, request, candidates.find(c => c.choice === 'hurricane')!);
+
+    // Thunder Wave should have an immunity penalty and be scored far below Hurricane
+    expect(twScored.breakdown.some(b => b.includes('Immune'))).toBe(true);
+    expect(twScored.score).toBeLessThan(-50);
+    expect(hurrScored.score).toBeGreaterThan(twScored.score);
   });
 });

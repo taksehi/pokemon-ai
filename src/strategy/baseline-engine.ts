@@ -1,6 +1,14 @@
+import { Dex } from '@pkmn/sim';
 import { BattleState } from '../battle/battle-state.js';
 import { RequestPayload } from '../sim/battle-runner.js';
 import { CandidateGenerator, EvaluatedCandidateAction } from './candidate-generator.js';
+
+function getGenNumber(format?: string): 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 {
+  if (!format) return 9;
+  const match = format.match(/^gen(\d+)/i);
+  const n = match ? parseInt(match[1], 10) : 9;
+  return (n >= 1 && n <= 9 ? n : 9) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+}
 
 export interface ScoredCandidateAction {
   candidate: EvaluatedCandidateAction;
@@ -39,6 +47,8 @@ export class BaselineEngine {
     const breakdown: string[] = [];
 
     const isForcedSwitch = Boolean(request.forceSwitch && request.forceSwitch[0]);
+    const p1Active = state.p1.active;
+    const p2Active = state.p2.active;
 
     if (candidate.type === 'move') {
       const evalData = candidate.evaluation;
@@ -61,14 +71,29 @@ export class BaselineEngine {
         }
       }
 
-      // 3. Priority move bonus
-      if (evalData.priority > 0) {
+      // 3. Opponent Threat Response & Priority moves
+      if (evalData.opponentThreatensKO) {
+        if (evalData.priority > 0) {
+          if (evalData.koProbability >= 0.8) {
+            score += 60;
+            breakdown.push(`Lethal priority move beats opponent before they KO us: +60`);
+          } else {
+            score += 35;
+            breakdown.push(`Priority move damages opponent before fainting: +35`);
+          }
+        } else if (evalData.outspeeds === true && evalData.koProbability >= 0.95) {
+          // Outspeed KO already handled above
+        } else {
+          score -= 50;
+          breakdown.push(`Imminent faint: slower attack may not execute: -50`);
+        }
+      } else if (evalData.priority > 0) {
         const prioBonus = evalData.priority * 15;
         score += prioBonus;
         breakdown.push(`Priority (+${evalData.priority}): +${prioBonus}`);
       }
 
-      // 4. Utility / Setup moves
+      // 4. Utility / Setup moves & Status Immunities
       const moveId = candidate.choice.toLowerCase();
       if (moveId === 'stealthrock' && !state.field.p2Hazards.stealthRock) {
         score += 35;
@@ -78,31 +103,67 @@ export class BaselineEngine {
         score += 20;
         breakdown.push(`Set Spikes: +20`);
       }
+
+      // Stat setup moves
       if (['swordsdance', 'nastyplot', 'calmmind', 'quiverdance', 'dragondance'].includes(moveId)) {
-        if (state.p1.active && state.p1.active.hpPercent > 70) {
-          score += 30;
-          breakdown.push(`Setup move with high HP: +30`);
+        if (evalData.opponentThreatensKO) {
+          score -= 60;
+          breakdown.push(`Cannot setup under lethal KO threat: -60`);
+        } else if (p1Active) {
+          const isAtkSetup = moveId === 'swordsdance' || moveId === 'dragondance';
+          const isSpaSetup = moveId === 'nastyplot' || moveId === 'calmmind' || moveId === 'quiverdance';
+          if ((isAtkSetup && p1Active.boosts.atk >= 4) || (isSpaSetup && p1Active.boosts.spa >= 4)) {
+            score -= 60;
+            breakdown.push(`Stat boost already saturated (>= +4): -60`);
+          } else if (p1Active.hpPercent > 70) {
+            score += 30;
+            breakdown.push(`Setup move with high HP: +30`);
+          }
         }
       }
 
       // Healing moves (essential across all gens, especially GSC Gen 2)
       if (['recover', 'roost', 'slackoff', 'softboiled', 'milkdrink', 'rest', 'synthesis', 'morningsun', 'moonlight', 'strengthsap', 'wish'].includes(moveId)) {
-        if (state.p1.active) {
-          if (state.p1.active.hpPercent < 50) {
+        if (p1Active) {
+          if (evalData.opponentThreatensKO) {
+            score -= 40;
+            breakdown.push(`Healing insufficient against lethal attack: -40`);
+          } else if (p1Active.hpPercent < 50) {
             score += 65;
             breakdown.push(`Critical recovery at low HP (<50%): +65`);
-          } else if (state.p1.active.hpPercent < 75) {
+          } else if (p1Active.hpPercent < 75) {
             score += 30;
             breakdown.push(`Sustain recovery at medium HP (<75%): +30`);
           }
         }
       }
 
-      // Crippling status affliction
+      // Crippling status affliction with type immunity checks
       if (['willowisp', 'thunderwave', 'toxic', 'glare', 'spore', 'sleeppowder', 'yawn'].includes(moveId)) {
-        if (state.p2.active && !state.p2.active.status) {
-          score += 40;
-          breakdown.push(`Inflict crippling status condition: +40`);
+        if (p2Active) {
+          const genNum = getGenNumber(state.format);
+          const dex = Dex.forGen(genNum);
+          const oppSpecies = dex.species.get(p2Active.species);
+          const oppTypes = p2Active.terastallized && p2Active.teraType
+            ? [p2Active.teraType]
+            : (oppSpecies?.types || []);
+
+          if (p2Active.status) {
+            score -= 50;
+            breakdown.push(`Opponent already has status (${p2Active.status}): -50`);
+          } else if (moveId === 'thunderwave' && (oppTypes.includes('Ground') || oppTypes.includes('Electric'))) {
+            score -= 100;
+            breakdown.push(`Immune: Ground/Electric immune to Thunder Wave: -100`);
+          } else if (moveId === 'toxic' && (oppTypes.includes('Poison') || oppTypes.includes('Steel'))) {
+            score -= 100;
+            breakdown.push(`Immune: Poison/Steel immune to Toxic: -100`);
+          } else if (moveId === 'willowisp' && oppTypes.includes('Fire')) {
+            score -= 100;
+            breakdown.push(`Immune: Fire type immune to burn: -100`);
+          } else {
+            score += 40;
+            breakdown.push(`Inflict crippling status condition: +40`);
+          }
         }
       }
 
@@ -131,14 +192,59 @@ export class BaselineEngine {
     } else if (candidate.type === 'switch') {
       const evalData = candidate.evaluation;
 
+      // Check if active Pokemon is threatened with lethal outspeed KO
+      const activeIsThreatened = Boolean(
+        p1Active &&
+        p2Active &&
+        CandidateGenerator.calculateOpponentThreat(
+          state,
+          p1Active.species,
+          p1Active.level,
+          p1Active.item,
+          p1Active.ability,
+          p1Active.boosts,
+          undefined,
+          p1Active.hpPercent
+        ).opponentThreatensKO
+      );
+
       if (isForcedSwitch) {
-        // When forced to switch, score based on health and safety
+        // When forced to switch, evaluate health, type resistance, and offensive counter
         const benchMon = state.p1.team.find(
           p => p.species.toLowerCase().replace(/[^a-z0-9]/g, '') === candidate.choice
         );
         const hp = benchMon ? benchMon.hpPercent : 100;
-        score += hp;
-        breakdown.push(`Forced switch health: +${hp}`);
+        score += hp * 0.4;
+        breakdown.push(`Forced switch health: +${(hp * 0.4).toFixed(1)}`);
+
+        // Defensive resistance bonus
+        if (evalData.typeResistanceAgainstOpponent !== undefined) {
+          if (evalData.typeResistanceAgainstOpponent <= 0.5) {
+            score += 35;
+            breakdown.push(`Defensive resistance to opponent STAB (${evalData.typeResistanceAgainstOpponent}x): +35`);
+          } else if (evalData.typeResistanceAgainstOpponent >= 1.5) {
+            score -= 30;
+            breakdown.push(`Weakness to opponent STAB (${evalData.typeResistanceAgainstOpponent}x): -30`);
+          }
+        }
+
+        // Offensive counter bonus
+        if (evalData.typeEffectivenessAgainstOpponent && evalData.typeEffectivenessAgainstOpponent >= 2.0) {
+          score += 25;
+          breakdown.push(`Super-effective counter matchup (${evalData.typeEffectivenessAgainstOpponent}x): +25`);
+        }
+
+        // Safety ratings
+        if (evalData.switchInSafety === 'fatal') {
+          score -= 100;
+          breakdown.push(`Fatal switch-in: -100`);
+        } else if (evalData.switchInSafety === 'risky') {
+          score -= 30;
+          breakdown.push(`Risky switch-in: -30`);
+        } else if (evalData.switchInSafety === 'safe') {
+          score += 20;
+          breakdown.push(`Safe switch-in: +20`);
+        }
 
         score -= evalData.hazardDamagePercent * 1.2;
         breakdown.push(`Hazard penalty: -${(evalData.hazardDamagePercent * 1.2).toFixed(1)}`);
@@ -152,14 +258,42 @@ export class BaselineEngine {
         breakdown.push(`Hazard penalty: -${(evalData.hazardDamagePercent * 1.5).toFixed(1)}`);
 
         if (evalData.switchInSafety === 'safe') {
-          score += 15;
-          breakdown.push(`Safe switch-in: +15`);
+          score += 20;
+          breakdown.push(`Safe switch-in: +20`);
         } else if (evalData.switchInSafety === 'risky') {
-          score -= 25;
-          breakdown.push(`Risky switch-in: -25`);
+          score -= 35;
+          breakdown.push(`Risky switch-in: -35`);
         } else if (evalData.switchInSafety === 'fatal') {
-          score -= 100;
-          breakdown.push(`Fatal switch-in: -100`);
+          score -= 120;
+          breakdown.push(`Fatal switch-in: -120`);
+        }
+
+        // Defensive resistance bonus
+        if (evalData.typeResistanceAgainstOpponent !== undefined) {
+          if (evalData.typeResistanceAgainstOpponent <= 0.5) {
+            score += 30;
+            breakdown.push(`Resists opponent STAB (${evalData.typeResistanceAgainstOpponent}x): +30`);
+          } else if (evalData.typeResistanceAgainstOpponent >= 1.5) {
+            score -= 35;
+            breakdown.push(`Weak to opponent STAB (${evalData.typeResistanceAgainstOpponent}x): -35`);
+          }
+        }
+
+        // Offensive counter bonus
+        if (evalData.typeEffectivenessAgainstOpponent && evalData.typeEffectivenessAgainstOpponent >= 2.0) {
+          score += 20;
+          breakdown.push(`Offensive advantage (${evalData.typeEffectivenessAgainstOpponent}x): +20`);
+        }
+
+        // Pivoting away when active Pokemon faces imminent KO
+        if (activeIsThreatened) {
+          if (evalData.switchInSafety === 'safe') {
+            score += 45;
+            breakdown.push(`Defensive pivot saves active Pokémon from lethal outspeed KO: +45`);
+          } else if (evalData.switchInSafety === 'risky') {
+            score += 10;
+            breakdown.push(`Emergency pivot under KO threat: +10`);
+          }
         }
       }
     }
