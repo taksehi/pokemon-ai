@@ -408,6 +408,7 @@ export class StateTracker {
         mon.maxHp = cond.maxHp;
         mon.hpPercent = cond.maxHp > 0 ? Math.round((cond.currentHp / cond.maxHp) * 100) : mon.hpPercent;
         mon.status = cond.status;
+        mon.fainted = cond.fainted;
         mon.boosts = createInitialBoostTable();
       }
       this.state.p1.active = mon;
@@ -440,6 +441,7 @@ export class StateTracker {
         mon.active = true;
         mon.hpPercent = cond.hpPercent;
         mon.status = cond.status;
+        mon.fainted = cond.fainted;
         mon.boosts = createInitialBoostTable();
       }
       this.state.p2.active = mon;

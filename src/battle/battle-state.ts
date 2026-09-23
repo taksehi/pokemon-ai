@@ -137,3 +137,8 @@ export function createInitialBattleState(format: string = 'gen9randombattle'): B
     }
   };
 }
+
+export function cloneBattleState(state: BattleState): BattleState {
+  return JSON.parse(JSON.stringify(state));
+}
+

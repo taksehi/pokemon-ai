@@ -46,8 +46,10 @@ export class CandidateGenerator {
   ): EvaluatedCandidateAction[] {
     const candidates: EvaluatedCandidateAction[] = [];
 
+    const isForcedSwitch = Boolean(request.forceSwitch && request.forceSwitch.some(f => f));
+
     // 1. Generate Move Candidates (if active and not forced to switch)
-    if (request.active && request.active[0] && !request.forceSwitch) {
+    if (request.active && request.active[0] && !isForcedSwitch) {
       const activeInfo = request.active[0];
       const moves = activeInfo.moves;
       const canTera = Boolean(activeInfo.canTerastallize);
@@ -86,7 +88,21 @@ export class CandidateGenerator {
     }
 
     // 2. Generate Switch Candidates (if forced or optional switches are legal)
-    if (request.side && request.side.pokemon) {
+    const activeInfo = request.active && request.active[0];
+    let isTrapped = Boolean(
+      activeInfo &&
+      (activeInfo.trapped || activeInfo.maybeTrapped) &&
+      !isForcedSwitch
+    );
+    if (isTrapped && state.p1.active) {
+      const genNum = getGenNumber(state.format);
+      const dex = Dex.forGen(genNum);
+      const activeSpecies = dex.species.get(state.p1.active.species);
+      if (genNum >= 6 && activeSpecies?.types.includes('Ghost')) {
+        isTrapped = false;
+      }
+    }
+    if (request.side && request.side.pokemon && !isTrapped) {
       request.side.pokemon.forEach((p, idx) => {
         const slot = idx + 1;
         // Can't switch into currently active Pokémon or fainted Pokémon
@@ -103,6 +119,27 @@ export class CandidateGenerator {
           slot,
           evaluation: switchEval
         });
+      });
+    }
+
+    // Fallback: If no candidates were generated but active pokemon exists (e.g. struggle / all disabled)
+    if (candidates.length === 0 && request.active && request.active[0]) {
+      candidates.push({
+        id: 'move 1',
+        type: 'move',
+        choice: 'struggle',
+        name: 'Struggle',
+        slot: 1,
+        terastallize: false,
+        evaluation: {
+          minDamagePercent: 10,
+          maxDamagePercent: 25,
+          koProbability: 0,
+          outspeeds: 'unknown',
+          priority: 0,
+          hazardDamagePercent: 0,
+          description: 'Struggle / Forced Move'
+        }
       });
     }
 

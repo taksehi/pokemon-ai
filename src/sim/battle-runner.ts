@@ -41,6 +41,8 @@ export interface RequestPayload {
   active?: Array<{
     moves: PokemonMoveInfo[];
     canTerastallize?: string;
+    trapped?: boolean;
+    maybeTrapped?: boolean;
   }>;
   side: {
     name: string;
@@ -63,6 +65,8 @@ export class BattleRunner {
   public accumulatedLines: string[] = [];
   public currentRqid: number = 0;
   public lastRequest: RequestPayload | null = null;
+  public lastError: string | null = null;
+  public errorCount: number = 0;
 
   constructor() {
     this.battleStream = new BattleStreams.BattleStream();
@@ -148,6 +152,11 @@ export class BattleRunner {
         if (!line.trim()) continue;
         turnLines.push(line);
         this.accumulatedLines.push(line);
+
+        if (line.startsWith('|error|')) {
+          this.lastError = line;
+          this.errorCount++;
+        }
 
         if (line.startsWith('|request|')) {
           const jsonStr = line.slice('|request|'.length).trim();
