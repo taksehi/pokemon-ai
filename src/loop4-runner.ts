@@ -1,5 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { BattleRunner } from './sim/battle-runner.js';
 import { StateTracker } from './battle/state-tracker.js';
 import { cloneBattleState, BattleState } from './battle/battle-state.js';
@@ -70,11 +72,18 @@ export async function run100AutonomousBattles(options: {
 
   // Helper to sample memory cleanly
   function sampleMemory(battleNum: number): MemorySample {
-    if (typeof (global as any).gc === 'function') {
-      try {
+    try {
+      if (typeof (global as any).gc === 'function') {
         (global as any).gc();
-      } catch {}
-    }
+      } else {
+        v8.setFlagsFromString('--expose_gc');
+        const gc = vm.runInNewContext('gc');
+        if (typeof gc === 'function') {
+          (global as any).gc = gc;
+          gc();
+        }
+      }
+    } catch {}
     const mem = process.memoryUsage();
     return {
       battleNumber: battleNum,
@@ -126,6 +135,7 @@ export async function run100AutonomousBattles(options: {
         }
 
         if (pendingStep) {
+          tracker.processLines(runner.accumulatedLines);
           const stateAfter = cloneBattleState(tracker.state);
           const rawLines = runner.accumulatedLines.slice(-10);
 

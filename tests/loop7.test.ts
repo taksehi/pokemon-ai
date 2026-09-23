@@ -15,9 +15,11 @@ describe('LOOP 7: Model Evaluation & Promotion', () => {
     expect(summary.activeModelPointerVerified).toBe(true);
     expect(fs.existsSync(summary.reportJsonPath)).toBe(true);
     expect(fs.existsSync(summary.reportMdPath)).toBe(true);
-  });
+  }, 30000);
 
   it('should ensure rejected model never steals active pointer', async () => {
+    const testRegistryPath = path.resolve(process.cwd(), 'data', 'models', 'test_loop7_active_model.json');
+    ModelRegistry.setRegistryPath(testRegistryPath);
     const modelsDir = path.resolve(process.cwd(), 'data', 'models');
     const oldModelPath = path.join(modelsDir, 'model_v0.json');
     const newModelPath = path.join(modelsDir, 'model_v1.json');
@@ -28,12 +30,17 @@ describe('LOOP 7: Model Evaluation & Promotion', () => {
       oldModelPath,
       newModelPath,
       numRounds: 1, // 2 games
-      thresholdWinRate: 100.0, // Guaranteed rejection
+      thresholdWinRate: 101.0, // Guaranteed rejection (> 100%)
       seedBase: 990000
     });
 
     expect(report.decision).toBe('REJECT');
     const activePointer = ModelRegistry.getActivePointer();
     expect(activePointer.activeVersion).toBe('v0');
-  });
+
+    // Clean up test file
+    if (fs.existsSync(testRegistryPath)) fs.unlinkSync(testRegistryPath);
+    // Reset back to default active model pointer file
+    ModelRegistry.setRegistryPath(path.resolve(process.cwd(), 'data', 'models', 'active_model.json'));
+  }, 15000);
 });

@@ -40,10 +40,39 @@ export class NeuralEngine {
         const avgDmg = (ev.minDamagePercent + ev.maxDamagePercent) / 2;
         score += avgDmg * 0.5;
         breakdown.push(`Damage contribution: +${(avgDmg * 0.5).toFixed(1)}`);
+
+        // Terastallization conservation: Never waste Tera early without lethal KO
+        if (candidate.terastallize) {
+          if (ev.koProbability >= 0.85) {
+            score += 25;
+            breakdown.push('Tera secures lethal KO: +25');
+          } else if ((state.turn ?? 1) <= 3) {
+            score -= 80;
+            breakdown.push('Conserve early-game Tera: -80');
+          } else {
+            score -= 25;
+            breakdown.push('Conserve mid-game Tera: -25');
+          }
+        }
+
+        // Threat response against boosted opponent setup sweepers
+        const p2Boosts = state.p2.active?.boosts;
+        const oppIsBoosted = p2Boosts && (p2Boosts.atk >= 1 || p2Boosts.spa >= 1 || p2Boosts.spe >= 1);
+        if (oppIsBoosted) {
+          if (ev.koProbability >= 0.7) {
+            score += 50;
+            breakdown.push('Lethal strike against boosted opponent: +50');
+          } else if (ev.priority && ev.priority > 0) {
+            score += 30;
+            breakdown.push('Priority strike against boosted opponent: +30');
+          }
+        }
       } else if (candidate.type === 'switch') {
+        const hazardDmg = candidate.evaluation.hazardDamagePercent ?? 0;
         if (!request.forceSwitch || !request.forceSwitch[0]) {
-          score -= 10; // Switch cost
-          breakdown.push('Voluntary switch cost: -10');
+          const switchCost = 12 + hazardDmg * 0.8;
+          score -= switchCost;
+          breakdown.push(`Voluntary switch cost with hazard damage (-${switchCost.toFixed(1)})`);
         }
       }
 

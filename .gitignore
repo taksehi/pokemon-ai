@@ -15,3 +15,8 @@ vendor/pokemon-showdown/
 .DS_Store
 data/autonomous_run/
 data/*.jsonl
+data/cycles/
+data/monitoring/
+data/loop4_experiences.json
+data/test_reject_comparison.*
+data/models/test_*.json
