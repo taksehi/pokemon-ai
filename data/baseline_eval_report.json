@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-23T08:10:27.737Z",
+  "formatid": "gen9randombattle",
+  "totalBattles": 30,
+  "wins": 28,
+  "losses": 2,
+  "draws": 0,
+  "winRatePercent": 93.3,
+  "avgBattleLengthTurns": 28.7,
+  "minBattleLength": 12,
+  "maxBattleLength": 69,
+  "topFailureTypes": [
+    {
+      "category": "Type Disadvantage KO",
+      "count": 1,
+      "description": "Active Pokémon fainted to a 2x or 4x super-effective opponent attack"
+    },
+    {
+      "category": "Outsped Lethal Strike",
+      "count": 1,
+      "description": "Slower active Pokémon was knocked out before it could execute its move"
+    },
+    {
+      "category": "Entry Hazard & Residual Attrition",
+      "count": 0,
+      "description": "Lost significant health or fainted from entry hazards (Stealth Rock/Spikes) or status"
+    }
+  ],
+  "seedReproducibilityVerified": true,
+  "rulesSymmetryVerified": true
+}

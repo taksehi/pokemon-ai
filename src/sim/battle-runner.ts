@@ -90,10 +90,26 @@ export class BattleRunner {
     const p2Name = options.p2Name ?? 'Bob_Opponent';
 
     const p1Spec: { name: string; team?: string } = { name: p1Name };
-    if (options.p1Team) p1Spec.team = options.p1Team;
+    if (options.p1Team) {
+      p1Spec.team = options.p1Team;
+    } else if (options.seed) {
+      const g1 = TeamGenerators.getTeamGenerator(formatid, options.seed);
+      p1Spec.team = Teams.pack(g1.getTeam());
+    }
 
     const p2Spec: { name: string; team?: string } = { name: p2Name };
-    if (options.p2Team) p2Spec.team = options.p2Team;
+    if (options.p2Team) {
+      p2Spec.team = options.p2Team;
+    } else if (options.seed) {
+      const revSeed: [number, number, number, number] = [
+        options.seed[3],
+        options.seed[2],
+        options.seed[1],
+        options.seed[0]
+      ];
+      const g2 = TeamGenerators.getTeamGenerator(formatid, revSeed);
+      p2Spec.team = Teams.pack(g2.getTeam());
+    }
 
     const startCommands = [
       `>start ${JSON.stringify({ formatid, seed: options.seed })}`,
