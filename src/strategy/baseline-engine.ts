@@ -30,7 +30,10 @@ export class BaselineEngine {
     }
 
     const scored = candidates.map(candidate => this.scoreCandidate(state, request, candidate));
-    scored.sort((a, b) => b.score - a.score);
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.candidate.id.localeCompare(b.candidate.id);
+    });
 
     return scored[0];
   }
