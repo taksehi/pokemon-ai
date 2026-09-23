@@ -264,6 +264,12 @@ export class ShowdownClient {
             this.trackerMap.delete(roomId);
             if (this.onBattleEnd) {
               this.onBattleEnd(winner);
+            } else if (this.config.searchLadder) {
+              console.log(`[LADDER] Battle complete. Waiting 5s before searching for next opponent...`);
+              setTimeout(() => {
+                console.log(`[LADDER] Searching for next match on the ladder in "${this.config.format}"...`);
+                this.send(`|/search ${this.config.format}`);
+              }, 5000);
             }
           }
           break;
