@@ -20,7 +20,8 @@ async function main() {
   const positionalArgs = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
   const username = process.env.SHOWDOWN_USERNAME || positionalArgs[0] || `AI_Bot_${Math.floor(Math.random() * 10000)}`;
   const password = process.env.SHOWDOWN_PASSWORD || '';
-  const isLadder = process.argv.includes('--ladder') || process.env.SHOWDOWN_LADDER === 'true';
+  const is1v1 = process.argv.includes('--1v1') || process.argv.includes('--no-ladder');
+  const isLadder = !is1v1 && (process.argv.includes('--ladder') || (process.env.SHOWDOWN_LADDER === 'true' && !positionalArgs[1]));
   const exitOnFinish = process.argv.includes('--exit-on-finish') || process.env.SHOWDOWN_EXIT_ON_FINISH === 'true';
   const targetOpponent = isLadder ? undefined : (process.env.SHOWDOWN_OPPONENT || positionalArgs[1]);
   const formatArg = process.argv.find(arg => arg.startsWith('--format='));

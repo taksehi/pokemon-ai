@@ -87,8 +87,23 @@ export class PromptCompiler {
       const evalData = c.evaluation;
       let details = '';
       if (c.type === 'move') {
+        const typeMatchupStr =
+          evalData.typeEffectivenessAgainstOpponent !== undefined
+            ? evalData.typeEffectivenessAgainstOpponent === 0
+              ? 'Type: IMMUNE (0x)'
+              : evalData.typeEffectivenessAgainstOpponent >= 4.0
+              ? 'Type: Double Super-Effective (4x)'
+              : evalData.typeEffectivenessAgainstOpponent >= 2.0
+              ? 'Type: Super-Effective (2x)'
+              : evalData.typeEffectivenessAgainstOpponent <= 0.25
+              ? 'Type: Double Resisted (0.25x)'
+              : evalData.typeEffectivenessAgainstOpponent <= 0.5
+              ? 'Type: Resisted (0.5x)'
+              : 'Type: Neutral (1x)'
+            : '';
         details = [
           `Damage: ${evalData.minDamagePercent}% - ${evalData.maxDamagePercent}%`,
+          typeMatchupStr,
           `KO Chance: ${Math.round(evalData.koProbability * 100)}%`,
           `Speed: ${evalData.outspeeds === true ? 'Faster' : evalData.outspeeds === false ? 'Slower' : 'Speed tie'}`,
           evalData.priority !== 0 ? `Priority: ${evalData.priority}` : ''
@@ -96,10 +111,20 @@ export class PromptCompiler {
           .filter(Boolean)
           .join(' | ');
       } else {
+        const resistStr = evalData.typeResistanceAgainstOpponent !== undefined
+          ? `Opponent STAB Resist: ${evalData.typeResistanceAgainstOpponent}x`
+          : '';
+        const offCounterStr = evalData.typeEffectivenessAgainstOpponent !== undefined && evalData.typeEffectivenessAgainstOpponent >= 2.0
+          ? `Offensive Counter: ${evalData.typeEffectivenessAgainstOpponent}x`
+          : '';
         details = [
           `Hazard Damage on Entry: -${evalData.hazardDamagePercent}%`,
-          `Safety: ${evalData.switchInSafety || 'safe'}`
-        ].join(' | ');
+          `Safety: ${evalData.switchInSafety || 'safe'}`,
+          resistStr,
+          offCounterStr
+        ]
+          .filter(Boolean)
+          .join(' | ');
       }
 
       sections.push(`Candidate ${idx + 1} [ID: "${c.id}"]: ${c.name} (${c.type.toUpperCase()})\n   Calculations: ${details}`);

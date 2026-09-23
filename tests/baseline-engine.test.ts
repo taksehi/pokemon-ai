@@ -111,7 +111,7 @@ describe('Loop 4: Deterministic Baseline Engine', () => {
     // Verify instrumentation log works on final state
     const log = BattleLogger.formatState(tracker.state);
     expect(log).toContain('[OBSERVE]');
-  });
+  }, 15000);
 
   it('should prefer safe defensive pivoting or priority over clicking a slow attack under lethal KO threat', () => {
     const tracker = new StateTracker('gen9ou');

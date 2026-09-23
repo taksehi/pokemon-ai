@@ -162,64 +162,102 @@ export class CandidateGenerator {
       else outspeeds = 'speed_tie';
     }
 
+    // Calculate type effectiveness against opponent
+    let typeEffectivenessAgainstOpponent: number | undefined = undefined;
+    if (dexMove && p2Active) {
+      const oppSpecies = dex.species.get(p2Active.species);
+      const oppTypes = p2Active.terastallized && p2Active.teraType
+        ? [p2Active.teraType]
+        : (oppSpecies?.types || ['Normal']);
+
+      if (dexMove.category !== 'Status') {
+        typeEffectivenessAgainstOpponent = this.getTypeEffectiveness(dexMove.type, oppTypes, dex);
+      } else {
+        const moveIdLower = moveId.toLowerCase();
+        if (moveIdLower === 'thunderwave' && (oppTypes.includes('Ground') || oppTypes.includes('Electric'))) {
+          typeEffectivenessAgainstOpponent = 0;
+        } else if (moveIdLower === 'toxic' && (oppTypes.includes('Poison') || oppTypes.includes('Steel'))) {
+          typeEffectivenessAgainstOpponent = 0;
+        } else if (moveIdLower === 'willowisp' && oppTypes.includes('Fire')) {
+          typeEffectivenessAgainstOpponent = 0;
+        } else if (['spore', 'sleeppowder'].includes(moveIdLower) && oppTypes.includes('Grass')) {
+          typeEffectivenessAgainstOpponent = 0;
+        } else {
+          typeEffectivenessAgainstOpponent = 1.0;
+        }
+      }
+    }
+
     // Damage calculation if damaging move
     if (dexMove && dexMove.category !== 'Status' && (dexMove.basePower > 0 || dexMove.basePowerCallback)) {
-      try {
-        const attackerItem = p1Active.item ? dex.items.get(p1Active.item)?.name || p1Active.item : undefined;
-        const attackerAbility = p1Active.ability ? dex.abilities.get(p1Active.ability)?.name || p1Active.ability : undefined;
-
-        const defenderItem = p2Active.revealedItem ? dex.items.get(p2Active.revealedItem)?.name || p2Active.revealedItem : undefined;
-        const defenderAbility = p2Active.revealedAbility ? dex.abilities.get(p2Active.revealedAbility)?.name || p2Active.revealedAbility : undefined;
-
-        const attacker = new CalcPokemon(gen, p1Active.species, {
-          level: p1Active.level,
-          item: attackerItem,
-          ability: attackerAbility,
-          boosts: {
-            atk: p1Active.boosts.atk,
-            def: p1Active.boosts.def,
-            spa: p1Active.boosts.spa,
-            spd: p1Active.boosts.spd,
-            spe: p1Active.boosts.spe
-          },
-          teraType: isTerastallizing && p1Active.teraType ? (p1Active.teraType as any) : undefined
-        });
-
-        const defender = new CalcPokemon(gen, p2Active.species, {
-          level: p2Active.level,
-          item: defenderItem,
-          ability: defenderAbility,
-          boosts: {
-            atk: p2Active.boosts.atk,
-            def: p2Active.boosts.def,
-            spa: p2Active.boosts.spa,
-            spd: p2Active.boosts.spd,
-            spe: p2Active.boosts.spe
-          },
-          teraType: p2Active.terastallized && p2Active.teraType ? (p2Active.teraType as any) : undefined
-        });
-
-        const calcMove = new CalcMove(gen, dexMove.name);
-        const result = calculate(gen, attacker, defender, calcMove);
-
-        const range = result.range();
-        const defenderMaxHp = defender.maxHP();
-
-        minDamagePercent = Math.round((range[0] / defenderMaxHp) * 1000) / 10;
-        maxDamagePercent = Math.round((range[1] / defenderMaxHp) * 1000) / 10;
-
-        // Calculate KO chance against current remaining HP percentage
-        const remainingHpAbs = Math.ceil((p2Active.hpPercent / 100) * defenderMaxHp);
-        const damageRolls: number[] = Array.isArray(result.damage)
-          ? (result.damage as number[])
-          : [result.damage as number];
-
-        const koRollCount = damageRolls.filter(d => typeof d === 'number' && d >= remainingHpAbs).length;
-        koProbability = Math.round((koRollCount / damageRolls.length) * 100) / 100;
-      } catch (err) {
-        // Fallback for custom or unmapped moves
+      if (typeEffectivenessAgainstOpponent === 0) {
+        // Natural type immunity (e.g. Ground vs Flying, Electric vs Ground, Normal vs Ghost)
         minDamagePercent = 0;
         maxDamagePercent = 0;
+        koProbability = 0;
+      } else {
+        try {
+          const attackerItem = p1Active.item ? dex.items.get(p1Active.item)?.name || p1Active.item : undefined;
+          const attackerAbility = p1Active.ability ? dex.abilities.get(p1Active.ability)?.name || p1Active.ability : undefined;
+
+          const defenderItem = p2Active.revealedItem ? dex.items.get(p2Active.revealedItem)?.name || p2Active.revealedItem : undefined;
+          const defenderAbility = p2Active.revealedAbility ? dex.abilities.get(p2Active.revealedAbility)?.name || p2Active.revealedAbility : undefined;
+
+          const attacker = new CalcPokemon(gen, p1Active.species, {
+            level: p1Active.level,
+            item: attackerItem,
+            ability: attackerAbility,
+            boosts: {
+              atk: p1Active.boosts.atk,
+              def: p1Active.boosts.def,
+              spa: p1Active.boosts.spa,
+              spd: p1Active.boosts.spd,
+              spe: p1Active.boosts.spe
+            },
+            teraType: isTerastallizing && p1Active.teraType ? (p1Active.teraType as any) : undefined
+          });
+
+          const defender = new CalcPokemon(gen, p2Active.species, {
+            level: p2Active.level,
+            item: defenderItem,
+            ability: defenderAbility,
+            boosts: {
+              atk: p2Active.boosts.atk,
+              def: p2Active.boosts.def,
+              spa: p2Active.boosts.spa,
+              spd: p2Active.boosts.spd,
+              spe: p2Active.boosts.spe
+            },
+            teraType: p2Active.terastallized && p2Active.teraType ? (p2Active.teraType as any) : undefined
+          });
+
+          const calcMove = new CalcMove(gen, dexMove.name);
+          const result = calculate(gen, attacker, defender, calcMove);
+
+          const range = result.range();
+          const defenderMaxHp = defender.maxHP();
+
+          minDamagePercent = Math.round((range[0] / defenderMaxHp) * 1000) / 10;
+          maxDamagePercent = Math.round((range[1] / defenderMaxHp) * 1000) / 10;
+
+          // Calculate KO chance against current remaining HP percentage
+          const remainingHpAbs = Math.ceil((p2Active.hpPercent / 100) * defenderMaxHp);
+          const damageRolls: number[] = Array.isArray(result.damage)
+            ? (result.damage as number[])
+            : [result.damage as number];
+
+          const koRollCount = damageRolls.filter(d => typeof d === 'number' && d >= remainingHpAbs).length;
+          koProbability = Math.round((koRollCount / damageRolls.length) * 100) / 100;
+        } catch (err) {
+          // Robust fallback for custom or unmapped moves
+          const isStab = p1Active.types?.includes(dexMove.type);
+          const bp = dexMove.basePower || 60;
+          const approxDmg = Math.round(
+            ((bp * (isStab ? 1.5 : 1.0) * (typeEffectivenessAgainstOpponent ?? 1.0)) / 2.5) * 10
+          ) / 10;
+          minDamagePercent = Math.max(1, Math.round(approxDmg * 0.85));
+          maxDamagePercent = Math.max(1, approxDmg);
+        }
       }
     }
 
@@ -236,9 +274,19 @@ export class CandidateGenerator {
     );
 
     const speedDesc = outspeeds === true ? 'We outspeed' : outspeeds === false ? 'Slower' : 'Speed tie';
+    const effDesc =
+      typeEffectivenessAgainstOpponent === 0
+        ? ' | Immune (0x)'
+        : typeEffectivenessAgainstOpponent && typeEffectivenessAgainstOpponent >= 2
+        ? ` | Super-effective (${typeEffectivenessAgainstOpponent}x)`
+        : typeEffectivenessAgainstOpponent && typeEffectivenessAgainstOpponent <= 0.5
+        ? ` | Resisted (${typeEffectivenessAgainstOpponent}x)`
+        : '';
     const damageDesc =
       maxDamagePercent > 0
-        ? `Damage: ${minDamagePercent}%-${maxDamagePercent}% (KO: ${Math.round(koProbability * 100)}%)`
+        ? `Damage: ${minDamagePercent}%-${maxDamagePercent}% (KO: ${Math.round(koProbability * 100)}%)${effDesc}`
+        : typeEffectivenessAgainstOpponent === 0
+        ? `No effect (Immune)`
         : 'Status move';
     const threatDesc = incomingThreat.opponentThreatensKO
       ? ' | Imminent KO threat!'
@@ -255,6 +303,7 @@ export class CandidateGenerator {
       hazardDamagePercent: 0,
       incomingMaxDamagePercent: incomingThreat.maxIncomingDamagePercent,
       opponentThreatensKO: incomingThreat.opponentThreatensKO,
+      typeEffectivenessAgainstOpponent,
       description: `${dexMove?.name || moveId} | ${damageDesc} | ${speedDesc} (Pri: ${priority})${threatDesc}`
     };
   }
@@ -574,6 +623,88 @@ export class CandidateGenerator {
     if (!species) return true;
     if (species.types.includes('Flying')) return false;
     return true;
+  }
+
+  /**
+   * Evaluates our active Pokémon's comprehensive offensive and defensive matchup against the current opponent.
+   */
+  public static evaluateActiveMatchup(state: BattleState): {
+    isUnfavorable: boolean;
+    defensiveMultiplier: number;
+    offensiveEffectiveness: number;
+    maxIncomingDamagePercent: number;
+    description: string;
+  } {
+    const p1Active = state.p1.active;
+    const p2Active = state.p2.active;
+    if (!p1Active || !p2Active) {
+      return {
+        isUnfavorable: false,
+        defensiveMultiplier: 1.0,
+        offensiveEffectiveness: 1.0,
+        maxIncomingDamagePercent: 0,
+        description: 'No active matchup'
+      };
+    }
+
+    const genNum = getGenNumber(state.format);
+    const dex = Dex.forGen(genNum);
+
+    const activeSpecies = dex.species.get(p1Active.species);
+    const activeTypes = p1Active.terastallized && p1Active.teraType
+      ? [p1Active.teraType]
+      : (activeSpecies?.types || ['Normal']);
+
+    const oppSpecies = dex.species.get(p2Active.species);
+    const oppTypes = p2Active.terastallized && p2Active.teraType
+      ? [p2Active.teraType]
+      : (oppSpecies?.types || ['Normal']);
+
+    // Defensive: Highest effectiveness of opponent STAB types against us
+    let maxDefMult = 0;
+    for (const ot of oppTypes) {
+      const mult = this.getTypeEffectiveness(ot, activeTypes, dex);
+      if (mult > maxDefMult) maxDefMult = mult;
+    }
+
+    // Offensive: Check damaging moves of active Pokemon against opponent
+    let maxOffMult = 0;
+    for (const m of p1Active.moves) {
+      const dexMove = dex.moves.get(m.id);
+      if (dexMove && dexMove.category !== 'Status') {
+        const mult = this.getTypeEffectiveness(dexMove.type, oppTypes, dex);
+        if (mult > maxOffMult) maxOffMult = mult;
+      }
+    }
+
+    // Incoming threat calculation
+    const incomingThreat = this.calculateOpponentThreat(
+      state,
+      p1Active.species,
+      p1Active.level,
+      p1Active.item || undefined,
+      p1Active.ability || undefined,
+      p1Active.boosts,
+      p1Active.terastallized && p1Active.teraType ? p1Active.teraType : undefined,
+      p1Active.hpPercent
+    );
+
+    // Unfavorable condition:
+    // 1) Active is facing an immediate lethal threat / outspeed KO
+    // 2) OR active is defensively weak to opponent STAB (>= 1.5x) and our offense is resisted/immune (maxOffMult <= 1.0)
+    // 3) OR opponent's incoming attack hits very hard (>= 45%) while active deals low/resisted damage (maxOffMult <= 0.5)
+    const isUnfavorable =
+      incomingThreat.opponentThreatensKO ||
+      (maxDefMult >= 1.5 && maxOffMult <= 1.0) ||
+      (incomingThreat.maxIncomingDamagePercent >= 45 && maxOffMult <= 0.5);
+
+    return {
+      isUnfavorable,
+      defensiveMultiplier: maxDefMult,
+      offensiveEffectiveness: maxOffMult,
+      maxIncomingDamagePercent: incomingThreat.maxIncomingDamagePercent,
+      description: `Active vs ${p2Active.species}: Def: ${maxDefMult}x, Off: ${maxOffMult}x, Incoming: ${incomingThreat.maxIncomingDamagePercent}%, Unfavorable: ${isUnfavorable}`
+    };
   }
 }
 

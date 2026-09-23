@@ -58,7 +58,38 @@ export class BaselineEngine {
       score += avgDamage;
       breakdown.push(`Base damage: +${avgDamage.toFixed(1)}`);
 
-      // 2. High KO bonus
+      // 2. Type effectiveness against current opponent
+      if (evalData.typeEffectivenessAgainstOpponent !== undefined) {
+        if (evalData.typeEffectivenessAgainstOpponent === 0) {
+          score -= 150;
+          breakdown.push(`Immune: Opponent is immune to ${candidate.name} (0x): -150`);
+        } else if (evalData.typeEffectivenessAgainstOpponent >= 4.0) {
+          score += 45;
+          breakdown.push(`Double super-effective (4x): +45`);
+        } else if (evalData.typeEffectivenessAgainstOpponent >= 2.0) {
+          score += 25;
+          breakdown.push(`Super-effective (2x): +25`);
+        } else if (evalData.typeEffectivenessAgainstOpponent <= 0.25) {
+          score -= 35;
+          breakdown.push(`Double resisted (0.25x): -35`);
+        } else if (evalData.typeEffectivenessAgainstOpponent <= 0.5) {
+          score -= 20;
+          breakdown.push(`Resisted (0.5x): -20`);
+        }
+      }
+
+      // Active matchup context: penalize staying in with a weak attack if active matchup is unfavorable
+      const activeMatchup = CandidateGenerator.evaluateActiveMatchup(state);
+      if (
+        activeMatchup.isUnfavorable &&
+        evalData.maxDamagePercent < 35 &&
+        (!evalData.typeEffectivenessAgainstOpponent || evalData.typeEffectivenessAgainstOpponent <= 1.0)
+      ) {
+        score -= 25;
+        breakdown.push(`Unfavorable active matchup with weak offensive output: -25`);
+      }
+
+      // 3. High KO bonus
       if (evalData.koProbability > 0) {
         const koBonus = evalData.koProbability * 80;
         score += koBonus;
@@ -71,15 +102,18 @@ export class BaselineEngine {
         }
       }
 
-      // 3. Opponent Threat Response & Priority moves
+      // 4. Opponent Threat Response & Priority moves
       if (evalData.opponentThreatensKO) {
         if (evalData.priority > 0) {
           if (evalData.koProbability >= 0.8) {
             score += 60;
             breakdown.push(`Lethal priority move beats opponent before they KO us: +60`);
+          } else if (evalData.maxDamagePercent >= 30) {
+            score += 25;
+            breakdown.push(`Priority move deals significant damage before fainting: +25`);
           } else {
-            score += 35;
-            breakdown.push(`Priority move damages opponent before fainting: +35`);
+            score += 10;
+            breakdown.push(`Priority move deals minor chip damage before fainting: +10`);
           }
         } else if (evalData.outspeeds === true && evalData.koProbability >= 0.95) {
           // Outspeed KO already handled above
@@ -285,14 +319,29 @@ export class BaselineEngine {
           breakdown.push(`Offensive advantage (${evalData.typeEffectivenessAgainstOpponent}x): +20`);
         }
 
-        // Pivoting away when active Pokemon faces imminent KO
-        if (activeIsThreatened) {
+        // Pivoting away when active Pokemon faces imminent KO or unfavorable matchup
+        const activeMatchup = CandidateGenerator.evaluateActiveMatchup(state);
+
+        if (activeIsThreatened || activeMatchup.isUnfavorable) {
           if (evalData.switchInSafety === 'safe') {
-            score += 45;
-            breakdown.push(`Defensive pivot saves active Pokémon from lethal outspeed KO: +45`);
+            if (evalData.typeResistanceAgainstOpponent !== undefined && evalData.typeResistanceAgainstOpponent <= 0.75) {
+              score += 55;
+              breakdown.push(`Favorable defensive pivot: active mon has poor matchup, switch-in resists opponent STAB (${evalData.typeResistanceAgainstOpponent}x): +55`);
+            } else if (evalData.typeEffectivenessAgainstOpponent && evalData.typeEffectivenessAgainstOpponent >= 2.0) {
+              score += 50;
+              breakdown.push(`Favorable offensive pivot: active mon has poor matchup, switch-in counters opponent (${evalData.typeEffectivenessAgainstOpponent}x): +50`);
+            } else {
+              score += 40;
+              breakdown.push(`Defensive pivot saves active Pokémon from unfavorable matchup: +40`);
+            }
           } else if (evalData.switchInSafety === 'risky') {
-            score += 10;
-            breakdown.push(`Emergency pivot under KO threat: +10`);
+            if (evalData.typeResistanceAgainstOpponent !== undefined && evalData.typeResistanceAgainstOpponent <= 0.75) {
+              score += 35;
+              breakdown.push(`Resistance pivot saves team against unfavorable matchup (${evalData.typeResistanceAgainstOpponent}x): +35`);
+            } else {
+              score += 10;
+              breakdown.push(`Emergency pivot under threat: +10`);
+            }
           }
         }
       }

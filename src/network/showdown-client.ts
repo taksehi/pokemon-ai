@@ -22,7 +22,7 @@ export class ShowdownClient {
   private ws: WebSocket | null = null;
   private config: ShowdownClientConfig;
   private trackerMap = new Map<string, StateTracker>();
-  private aiPlayer: AIStrategyPlayer;
+  private aiPlayer: AIStrategyPlayer | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private currentRoomId: string = '';
   public onBattleEnd?: (winner: string) => void;
@@ -35,15 +35,9 @@ export class ShowdownClient {
       ...config
     };
 
-    const llm = config.llmClient || new MockLLMClient(() => JSON.stringify({
-      selected_candidate_id: 'move 1',
-      action_type: 'move',
-      confidence: 0.9,
-      opponent_prediction: 'Opponent attacks',
-      strategic_rationale: 'Default offensive pressure'
-    }));
-
-    this.aiPlayer = new AIStrategyPlayer(llm);
+    if (config.llmClient) {
+      this.aiPlayer = new AIStrategyPlayer(config.llmClient);
+    }
   }
 
   /**
@@ -190,8 +184,16 @@ export class ShowdownClient {
             console.log(`                      Format: "${format}"`);
             console.log(`============================================================\n`);
 
+            if (this.trackerMap.size > 0) {
+              console.log(`[CHALLENGE REJECTED] Already in an active battle. Rejecting challenge from "${cleanSender}".`);
+              this.send(`|/pm ${cleanSender}, Sorry, I am currently in a battle. Please challenge me after it finishes!`);
+              this.send(`|/reject ${cleanSender}`);
+              break;
+            }
+
             if (this.config.autoAcceptChallenges) {
               console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${cleanSender}"...`);
+              this.send('|/search none');
               this.send(`|/accept ${cleanSender}`);
             }
           } else {
@@ -218,9 +220,15 @@ export class ShowdownClient {
             if (challenges.challengesFrom) {
               for (const [challenger, format] of Object.entries(challenges.challengesFrom)) {
                 const cleanChallenger = challenger.trim().replace(/^[^a-zA-Z0-9]+/, '');
+                if (this.trackerMap.size > 0) {
+                  console.log(`[CHALLENGE REJECTED] Already in an active battle. Rejecting challenge from "${cleanChallenger}".`);
+                  this.send(`|/reject ${cleanChallenger}`);
+                  continue;
+                }
                 console.log(`[CHALLENGE RECEIVED] Incoming challenge from "${cleanChallenger}" (${format})`);
                 if (this.config.autoAcceptChallenges) {
                   console.log(`[CHALLENGE ACCEPTED] Accepting challenge from "${cleanChallenger}"...`);
+                  this.send('|/search none');
                   this.send(`|/accept ${cleanChallenger}`);
                 }
               }
@@ -240,6 +248,8 @@ export class ShowdownClient {
             console.log(`[BATTLE INIT] Joined battle room: ${roomId} (Format: ${roomFormat})`);
             console.log(`============================================================\n`);
             this.trackerMap.set(roomId, new StateTracker(roomFormat));
+            // Stop any ongoing ladder search immediately upon joining a battle room
+            this.send('|/search none');
           }
           break;
         }
@@ -262,14 +272,18 @@ export class ShowdownClient {
             this.send(`${roomId}|gg`);
             this.send(`|/leave ${roomId}`);
             this.trackerMap.delete(roomId);
-            if (this.onBattleEnd) {
-              this.onBattleEnd(winner);
-            } else if (this.config.searchLadder) {
-              console.log(`[LADDER] Battle complete. Waiting 5s before searching for next opponent...`);
-              setTimeout(() => {
-                console.log(`[LADDER] Searching for next match on the ladder in "${this.config.format}"...`);
-                this.send(`|/search ${this.config.format}`);
-              }, 5000);
+            if (this.trackerMap.size === 0) {
+              if (this.onBattleEnd) {
+                this.onBattleEnd(winner);
+              } else if (this.config.searchLadder) {
+                console.log(`[LADDER] Battle complete. Waiting 5s before searching for next opponent...`);
+                setTimeout(() => {
+                  if (this.trackerMap.size === 0) {
+                    console.log(`[LADDER] Searching for next match on the ladder in "${this.config.format}"...`);
+                    this.send(`|/search ${this.config.format}`);
+                  }
+                }, 5000);
+              }
             }
           }
           break;
@@ -369,15 +383,26 @@ export class ShowdownClient {
 
       console.log(BattleLogger.formatState(tracker.state));
 
-      // Decide action via AIStrategyPlayer (with deterministic fallback)
-      const decision = await this.aiPlayer.decideAction(tracker.state, request);
+      // Decide action via AIStrategyPlayer if LLM is provided, else use deterministic BaselineEngine
+      let candidateId: string;
+      let rationale: string;
 
-      console.log(`[ACTION] Room: ${roomId} -> "${decision.candidate.id}" (rqid: ${request.rqid})`);
-      console.log(`[RATIONALE] ${decision.rationale}\n`);
+      if (this.aiPlayer) {
+        const decision = await this.aiPlayer.decideAction(tracker.state, request);
+        candidateId = decision.candidate.id;
+        rationale = decision.rationale;
+      } else {
+        const best = BaselineEngine.selectBestAction(tracker.state, request);
+        candidateId = best.candidate.id;
+        rationale = `[BASELINE] Score: ${best.score} | Breakdown: [${best.breakdown.join('; ')}]`;
+      }
+
+      console.log(`[ACTION] Room: ${roomId} -> "${candidateId}" (rqid: ${request.rqid})`);
+      console.log(`[RATIONALE] ${rationale}\n`);
 
       // Transmit to room: <roomId>|/choose <action>|<rqid>
       const rqidToken = request.rqid !== undefined ? `|${request.rqid}` : '';
-      this.send(`${roomId}|/choose ${decision.candidate.id}${rqidToken}`);
+      this.send(`${roomId}|/choose ${candidateId}${rqidToken}`);
     } catch (err) {
       console.error(`[REQUEST HANDLER ERROR] Room ${roomId}:`, err);
     }
