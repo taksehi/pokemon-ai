@@ -7,6 +7,7 @@ import { NeuralValueModel } from '../src/model/model-artifact.js';
 
 describe('LOOP 8: Autonomous Training Cycle', () => {
   it('should run multiple iterations unattended and maintain unambiguous active model state', async () => {
+    ModelRegistry.setRegistryPath(path.resolve(process.cwd(), 'data', 'models', 'test_loop8_active_model.json'));
     // Run 2 iterations with 2 battles and 1 eval round for fast test execution
     const summary = await runLoop8AutonomousCycle(2, 2, 1);
 

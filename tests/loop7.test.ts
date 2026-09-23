@@ -8,6 +8,7 @@ import { NeuralValueModel } from '../src/model/model-artifact.js';
 
 describe('LOOP 7: Model Evaluation & Promotion', () => {
   it('should run old vs new model evaluation on held-out seeds and enforce pointer safety', async () => {
+    ModelRegistry.setRegistryPath(path.resolve(process.cwd(), 'data', 'models', 'test_loop7_active_model.json'));
     const summary = await runLoop7Evaluation(4, 50.0); // 8 fast games
     expect(summary.passed).toBe(true);
     expect(summary.totalBattles).toBe(8);

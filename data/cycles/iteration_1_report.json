@@ -1,19 +1,19 @@
 {
   "iteration": 1,
-  "versionId": "v_iter_1_1790151491234",
+  "versionId": "v_iter_1_1790151606665",
   "battlesAttempted": 2,
   "battlesSucceeded": 2,
   "battlesFailed": 0,
   "experiencesCollected": 43,
   "modelTrained": true,
-  "modelPath": "D:\\pokemon-ai\\data\\models\\model_v_iter_1_1790151491234.json",
+  "modelPath": "D:\\pokemon-ai\\data\\models\\model_v_iter_1_1790151606665.json",
   "evalReport": {
-    "timestamp": "2026-09-23T08:18:12.294Z",
+    "timestamp": "2026-09-23T08:20:08.485Z",
     "formatid": "gen9randombattle",
-    "oldModelVersion": "v_iter_3_1790151480868",
-    "oldModelPath": "D:\\pokemon-ai\\data\\models\\model_v_iter_3_1790151480868.json",
-    "newModelVersion": "v_iter_1_1790151491234",
-    "newModelPath": "D:\\pokemon-ai\\data\\models\\model_v_iter_1_1790151491234.json",
+    "oldModelVersion": "v0",
+    "oldModelPath": "D:\\pokemon-ai\\data\\models\\model_v0.json",
+    "newModelVersion": "v_iter_1_1790151606665",
+    "newModelPath": "D:\\pokemon-ai\\data\\models\\model_v_iter_1_1790151606665.json",
     "totalBattles": 2,
     "newModelWins": 1,
     "oldModelWins": 1,
@@ -23,11 +23,11 @@
     "winRateDelta": 0,
     "thresholdWinRate": 50,
     "decision": "ACCEPT",
-    "activeModelPointerBefore": "v_iter_3_1790151480868",
-    "activeModelPointerAfter": "v_iter_1_1790151491234",
+    "activeModelPointerBefore": "v0",
+    "activeModelPointerAfter": "v_iter_1_1790151606665",
     "seedPolicy": "Mirrored Pairwise Fixed-Seed (Loop 5 Compliant)",
     "heldOutSeedRange": "800500 - 800500"
   },
   "promoted": true,
-  "activeModelVersion": "v_iter_1_1790151491234"
+  "activeModelVersion": "v_iter_1_1790151606665"
 }
