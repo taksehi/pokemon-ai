@@ -303,8 +303,8 @@ export class CandidateGenerator {
       state,
       p1Active.species,
       p1Active.level,
-      p1Active.item,
-      p1Active.ability,
+      p1Active.item ?? undefined,
+      p1Active.ability ?? undefined,
       p1Active.boosts,
       isTerastallizing && p1Active.teraType ? p1Active.teraType : undefined,
       p1Active.hpPercent
@@ -384,8 +384,8 @@ export class CandidateGenerator {
           state,
           p1Mon.species,
           100,
-          p1Mon.item,
-          p1Mon.baseAbility,
+          p1Mon.item ?? undefined,
+          p1Mon.ability ?? undefined,
           undefined,
           undefined,
           remainingHp
@@ -518,8 +518,8 @@ export class CandidateGenerator {
 
     // Determine opponent candidate moves to evaluate
     const movesToEvaluate: string[] = [];
-    if (p2Active.moves && p2Active.moves.length > 0) {
-      for (const m of p2Active.moves) {
+    if (p2Active.revealedMoves && p2Active.revealedMoves.length > 0) {
+      for (const m of p2Active.revealedMoves) {
         const moveData = dex.moves.get(m);
         if (moveData && moveData.category !== 'Status') {
           movesToEvaluate.push(moveData.name);

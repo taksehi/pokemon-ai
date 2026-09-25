@@ -24,6 +24,8 @@ export interface ExperienceRecord {
   next_state: BattleState;
 }
 
+export type RawExperienceRecord = ExperienceRecord;
+
 export const CandidateEvaluationSchema = z.object({
   minDamagePercent: z.number(),
   maxDamagePercent: z.number(),

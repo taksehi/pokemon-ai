@@ -1,6 +1,6 @@
 {
-  "activeVersion": "v_allgens_1790331653858",
-  "activeModelPath": "D:\\pokemon-ai\\data\\models\\model_v_allgens_1790331653858.json",
-  "updatedAt": "2026-09-25T10:21:00.811Z",
-  "reason": "Multi-generation model deployed with enhanced cross-gen heuristics"
+  "activeVersion": "v_allgens_1790335140888",
+  "activeModelPath": "D:\\pokemon-ai\\data\\models\\model_v_allgens_1790335140888.json",
+  "updatedAt": "2026-09-25T11:19:05.302Z",
+  "reason": "Multi-generation champion trained & evaluated across Gen 1-9 random battles (52.8%)"
 }

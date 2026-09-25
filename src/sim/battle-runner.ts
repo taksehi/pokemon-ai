@@ -94,7 +94,7 @@ export class BattleRunner {
     if (options.p1Team) {
       p1Spec.team = options.p1Team;
     } else if (options.seed) {
-      const g1 = TeamGenerators.getTeamGenerator(formatid, options.seed);
+      const g1 = TeamGenerators.getTeamGenerator(formatid, options.seed as any);
       p1Spec.team = Teams.pack(g1.getTeam());
     }
 
@@ -108,7 +108,7 @@ export class BattleRunner {
         options.seed[1],
         options.seed[0]
       ];
-      const g2 = TeamGenerators.getTeamGenerator(formatid, revSeed);
+      const g2 = TeamGenerators.getTeamGenerator(formatid, revSeed as any);
       p2Spec.team = Teams.pack(g2.getTeam());
     }
 

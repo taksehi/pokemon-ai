@@ -115,7 +115,8 @@ export async function runContinuousAutonomousTraining(
           (seedBase + 303) % 65535 + 1
         ];
 
-        const formatid = config.formats[(battleIndex - 1) % config.formats.length];
+        const activeFormats = config.formats && config.formats.length > 0 ? config.formats : ALL_GEN_RANDOM_BATTLE_FORMATS;
+        const formatid = activeFormats[(battleIndex - 1) % activeFormats.length];
         const runner = new BattleRunner();
         const tracker = new StateTracker(formatid);
 

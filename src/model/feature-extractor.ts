@@ -92,7 +92,7 @@ export function extractFeatures(
   // 13. Speed advantage estimate [-1, 1]
   let speedAdvantage = 0;
   const s1 = p1Active?.stats?.spe ?? 100;
-  const s2 = p2Active?.stats?.spe ?? 100;
+  const s2 = (p2Active as any)?.stats?.spe ?? 100;
   if (s1 > s2) speedAdvantage = 1;
   else if (s2 > s1) speedAdvantage = -1;
 

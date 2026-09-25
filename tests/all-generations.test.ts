@@ -93,25 +93,40 @@ describe('All-Generations (Gen 1-9) Random Battle Integration & Heuristics', () 
   it('should apply Gen 1 specific mechanics (Hyper Beam KO no-recharge bonus)', () => {
     const tracker = new StateTracker('gen1randombattle');
     tracker.state.p1.active = {
+      ident: 'p1: Tauros',
       species: 'Tauros',
       level: 100,
+      gender: '',
+      currentHp: 100,
+      maxHp: 100,
       hpPercent: 100,
+      status: null,
+      types: ['Normal'],
       item: null,
       ability: null,
       stats: { atk: 100, def: 95, spa: 70, spd: 70, spe: 110 },
       boosts: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 },
-      moves: ['hyperbeam']
+      moves: [{ id: 'hyperbeam', name: 'Hyper Beam', pp: 5, maxpp: 5, disabled: false }],
+      fainted: false,
+      active: true,
+      teraType: null,
+      terastallized: false
     };
     tracker.state.p2.active = {
+      ident: 'p2: Alakazam',
       species: 'Alakazam',
       level: 100,
+      gender: '',
       hpPercent: 15,
-      item: null,
-      ability: null,
-      stats: { atk: 50, def: 45, spa: 135, spd: 135, spe: 120 },
-      boosts: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 },
-      moves: ['psychic'],
-      revealedMoves: ['psychic']
+      status: null,
+      fainted: false,
+      active: true,
+      revealedMoves: ['psychic'],
+      revealedAbility: null,
+      revealedItem: null,
+      teraType: null,
+      terastallized: false,
+      boosts: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 }
     };
 
     const mockReq: any = {

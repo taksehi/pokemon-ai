@@ -273,8 +273,8 @@ export class BaselineEngine {
           state,
           p1Active.species,
           p1Active.level,
-          p1Active.item,
-          p1Active.ability,
+          p1Active.item ?? undefined,
+          p1Active.ability ?? undefined,
           p1Active.boosts,
           undefined,
           p1Active.hpPercent
