@@ -1,11 +1,27 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { ShowdownClient } from './network/showdown-client.js';
 import { JevClient } from './ai/jev-client.js';
 import { OllamaClient } from './ai/llm-client.js';
 
+// Explicitly parse .env so values defined in .env take precedence over stale parent shell variables
 try {
-  (process as any).loadEnvFile?.();
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const envFile = fs.readFileSync(envPath, 'utf8');
+    for (const line of envFile.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx !== -1) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        const val = trimmed.slice(eqIdx + 1).trim();
+        process.env[key] = val;
+      }
+    }
+  }
 } catch {
-  // Ignore if .env is missing or invalid
+  // Ignore if .env is missing or unreadable
 }
 
 process.on('uncaughtException', err => {
@@ -18,12 +34,18 @@ process.on('unhandledRejection', reason => {
 
 async function main() {
   const positionalArgs = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
-  const username = process.env.SHOWDOWN_USERNAME || positionalArgs[0] || `AI_Bot_${Math.floor(Math.random() * 10000)}`;
+  const rawUsername = positionalArgs[0] || process.env.SHOWDOWN_USERNAME || `AI_Bot_${Math.floor(Math.random() * 10000)}`;
+  const username = (process.env.SHOWDOWN_USERNAME && process.env.SHOWDOWN_USERNAME.toLowerCase() === rawUsername.toLowerCase())
+    ? process.env.SHOWDOWN_USERNAME
+    : rawUsername;
   const password = process.env.SHOWDOWN_PASSWORD || '';
-  const is1v1 = process.argv.includes('--1v1') || process.argv.includes('--no-ladder');
-  const isLadder = !is1v1 && (process.argv.includes('--ladder') || (process.env.SHOWDOWN_LADDER === 'true' && !positionalArgs[1]));
+  const is1v1 = process.argv.includes('--1v1') || process.argv.includes('--no-ladder') || process.argv.includes('--listen');
+  const targetOpponent = is1v1 ? undefined : (process.env.SHOWDOWN_OPPONENT || positionalArgs[1]);
+  const isLadder = !is1v1 && !targetOpponent && (
+    process.argv.includes('--ladder') ||
+    (process.env.SHOWDOWN_LADDER === 'true' && positionalArgs.length === 0 && !process.argv.includes('--listen'))
+  );
   const exitOnFinish = process.argv.includes('--exit-on-finish') || process.env.SHOWDOWN_EXIT_ON_FINISH === 'true';
-  const targetOpponent = isLadder ? undefined : (process.env.SHOWDOWN_OPPONENT || positionalArgs[1]);
   const formatArg = process.argv.find(arg => arg.startsWith('--format='));
   const isGen2 = process.argv.includes('--gen2');
   const format =

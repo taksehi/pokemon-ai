@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "live": "tsx src/connect-live.ts",
+    "live:ladder": "tsx src/connect-live.ts --ladder",
     "live:loop": "tsx src/live-loop.ts",
     "autonomous": "tsx src/autonomous-runner.ts",
     "test": "vitest run",
