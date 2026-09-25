@@ -100,31 +100,56 @@ npx tsx src/run-verification.ts
 #### Option A: Challenge the Bot from your Web Browser (Recommended)
 1. Launch the bot in listening mode:
    ```bash
-   # Gen 9 Random Battles
+   # Gen 9 Random Battles (Default)
    npm run live AIBot_Alpha
 
-   # OR Gen 2 Random Battles
-   npm run live AIBot_Alpha -- --gen2
+   # Play in ANY Generation from Gen 1 to Gen 9:
+   npm run live AIBot_Alpha -- --gen1   # Red / Blue / Yellow
+   npm run live AIBot_Alpha -- --gen2   # Gold / Silver / Crystal
+   npm run live AIBot_Alpha -- --gen3   # Ruby / Sapphire / Emerald
+   npm run live AIBot_Alpha -- --gen4   # Diamond / Pearl / Platinum
+   npm run live AIBot_Alpha -- --gen5   # Black / White
+   npm run live AIBot_Alpha -- --gen6   # X / Y
+   npm run live AIBot_Alpha -- --gen7   # Sun / Moon
+   npm run live AIBot_Alpha -- --gen8   # Sword / Shield
+   npm run live AIBot_Alpha -- --gen9   # Scarlet / Violet
    ```
 2. Open **[play.pokemonshowdown.com](https://play.pokemonshowdown.com)** in your web browser.
 3. On the right sidebar, click **"Find a user"** and search for `AIBot_Alpha`.
-4. Click **"Challenge"** and choose your battle format (e.g. `[Gen 9] Random Battle` or `[Gen 2] Random Battle`).
-5. The bot will **automatically accept your challenge** via private message and battle you in real-time in your browser!
+4. Click **"Challenge"** and choose your battle format (e.g. `[Gen 1] Random Battle` up to `[Gen 9] Random Battle`).
+5. The bot will **automatically accept your challenge** and battle you in real-time in your browser!
 
 #### Option B: Matchmaking on the Public Showdown Ladder
-Play against real players on Pokémon Showdown's public competitive ladder:
+Play against real players on Pokémon Showdown's public competitive ladder in any generation:
 ```bash
 # Play on Gen 9 Random Battle ladder
 npm run live AIBot_Alpha -- --ladder
 
-# Play on Gen 2 Random Battle ladder
+# Play on Gen 1-8 Random Battle ladder
+npm run live AIBot_Alpha -- --gen1 --ladder
 npm run live AIBot_Alpha -- --gen2 --ladder
+npm run live AIBot_Alpha -- --gen3 --ladder
+npm run live AIBot_Alpha -- --gen4 --ladder
+npm run live AIBot_Alpha -- --gen5 --ladder
+npm run live AIBot_Alpha -- --gen6 --ladder
+npm run live AIBot_Alpha -- --gen7 --ladder
+npm run live AIBot_Alpha -- --gen8 --ladder
 
 # Play 1 match and cleanly exit when finished
 npm run live AIBot_Alpha -- --ladder --exit-on-finish
 ```
 
-#### Option C: Play with TypeSafe AI Jev System One
+#### Option C: Multi-Generation Autonomous Training & Improvement
+Train and evaluate neural models across all 9 generations (Gen 1 through Gen 9):
+```bash
+# Train on multi-generation self-play battles and promote candidate model
+npm run train:all-gens
+
+# Continuous unattended autonomous multi-generation training loop
+npm run autonomous
+```
+
+#### Option D: Play with TypeSafe AI Jev System One
 ```bash
 $env:TYPESAFE_API_KEY="your_api_key_here"
 npm run live AIBot_Alpha -- --jev --ladder

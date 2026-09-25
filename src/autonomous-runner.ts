@@ -12,23 +12,38 @@ import { ModelRegistry } from './model/model-registry.js';
 import { FailureCategorizer, CycleFailureReport } from './monitoring/failure-categorizer.js';
 import { cloneBattleState } from './battle/battle-state.js';
 
+export const ALL_GEN_RANDOM_BATTLE_FORMATS = [
+  'gen1randombattle',
+  'gen2randombattle',
+  'gen3randombattle',
+  'gen4randombattle',
+  'gen5randombattle',
+  'gen6randombattle',
+  'gen7randombattle',
+  'gen8randombattle',
+  'gen9randombattle'
+];
+
 export interface AutonomousRunConfig {
   targetTotalBattles: number;
   battlesPerCycle: number;
   evalRoundsPerCycle: number;
   thresholdWinRate: number;
   outputDir: string;
+  formats?: string[];
 }
 
 export async function runContinuousAutonomousTraining(
   customConfig?: Partial<AutonomousRunConfig>
 ): Promise<void> {
+  const formats = customConfig?.formats ?? ALL_GEN_RANDOM_BATTLE_FORMATS;
   const config: AutonomousRunConfig = {
     targetTotalBattles: customConfig?.targetTotalBattles ?? 2000,
     battlesPerCycle: customConfig?.battlesPerCycle ?? 100,
-    evalRoundsPerCycle: customConfig?.evalRoundsPerCycle ?? 6, // 12 games per eval
+    evalRoundsPerCycle: customConfig?.evalRoundsPerCycle ?? 9, // 18 games per eval (covering all 9 gens symmetrically)
     thresholdWinRate: customConfig?.thresholdWinRate ?? 50.0,
-    outputDir: customConfig?.outputDir ?? path.resolve(process.cwd(), 'data', 'autonomous_run')
+    outputDir: customConfig?.outputDir ?? path.resolve(process.cwd(), 'data', 'autonomous_run'),
+    formats
   };
 
   if (!fs.existsSync(config.outputDir)) {
@@ -49,8 +64,9 @@ export async function runContinuousAutonomousTraining(
   console.log(`Configuration:`);
   console.log(`  Target Battles:     ${config.targetTotalBattles}`);
   console.log(`  Battles per Cycle:  ${config.battlesPerCycle}`);
-  console.log(`  Evaluation Rounds:  ${config.evalRoundsPerCycle} (mirrored held-out pairs)`);
+  console.log(`  Evaluation Rounds:  ${config.evalRoundsPerCycle} (mirrored held-out pairs across gens)`);
   console.log(`  Win Rate Threshold: ${config.thresholdWinRate}%`);
+  console.log(`  Formats Sampled:    ${formats.join(', ')}`);
   console.log(`  Working Directory:  ${config.outputDir}\n`);
 
   let isShuttingDown = false;
@@ -99,11 +115,12 @@ export async function runContinuousAutonomousTraining(
           (seedBase + 303) % 65535 + 1
         ];
 
+        const formatid = config.formats[(battleIndex - 1) % config.formats.length];
         const runner = new BattleRunner();
-        const tracker = new StateTracker('gen9randombattle');
+        const tracker = new StateTracker(formatid);
 
         await runner.start({
-          formatid: 'gen9randombattle',
+          formatid,
           p1Name: `Agent_${cycleIndex}`,
           p2Name: 'Showdown_Bot',
           seed,
@@ -211,14 +228,15 @@ export async function runContinuousAutonomousTraining(
       continue;
     }
 
-    // STEP 3: Evaluate on Held-out Benchmark
-    console.log(`  [Step 3] Evaluating Candidate Model on Held-Out Benchmark...`);
+    // STEP 3: Evaluate on Held-out Benchmark across all generations
+    console.log(`  [Step 3] Evaluating Candidate Model on Held-Out Benchmark Across Formats...`);
     const evalReportPath = path.join(config.outputDir, `eval_${versionId}.json`);
     const evalReport = await ModelEvaluator.evaluateModels({
       oldModelPath: activePointer.activeModelPath,
       newModelPath,
       numRounds: config.evalRoundsPerCycle,
       thresholdWinRate: config.thresholdWinRate,
+      formats: config.formats,
       reportJsonPath: evalReportPath,
       seedBase: 850000 + cycleIndex * 1000
     });

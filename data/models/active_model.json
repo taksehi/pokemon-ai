@@ -1,6 +1,6 @@
 {
-  "activeVersion": "v_hardened_1790157730922",
-  "activeModelPath": "D:\\pokemon-ai\\data\\models\\model_v_hardened_1790157730922.json",
-  "updatedAt": "2026-09-23T10:02:14.295Z",
-  "reason": "Hardened model beat previous champion 50% vs 50%"
+  "activeVersion": "v_allgens_1790331653858",
+  "activeModelPath": "D:\\pokemon-ai\\data\\models\\model_v_allgens_1790331653858.json",
+  "updatedAt": "2026-09-25T10:21:00.811Z",
+  "reason": "Multi-generation model deployed with enhanced cross-gen heuristics"
 }

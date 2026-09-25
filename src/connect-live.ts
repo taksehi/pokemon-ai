@@ -47,10 +47,14 @@ async function main() {
   );
   const exitOnFinish = process.argv.includes('--exit-on-finish') || process.env.SHOWDOWN_EXIT_ON_FINISH === 'true';
   const formatArg = process.argv.find(arg => arg.startsWith('--format='));
-  const isGen2 = process.argv.includes('--gen2');
+  const genFlag = process.argv.find(arg => /^--gen[1-9]$/i.test(arg));
   const format =
     process.env.SHOWDOWN_FORMAT ||
-    (formatArg ? formatArg.split('=')[1] : isGen2 ? 'gen2randombattle' : 'gen9randombattle');
+    (formatArg
+      ? formatArg.split('=')[1]
+      : genFlag
+      ? `gen${genFlag.slice(5)}randombattle`
+      : 'gen9randombattle');
   const serverUrl = process.env.SHOWDOWN_SERVER || 'wss://sim3.psim.us/showdown/websocket';
   const mode = process.argv.includes('--jev')
     ? 'jev'

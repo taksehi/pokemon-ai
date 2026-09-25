@@ -132,13 +132,41 @@ export class BaselineEngine {
 
       // 4. Utility / Setup moves & Status Immunities
       const moveId = candidate.choice.toLowerCase();
-      if (moveId === 'stealthrock' && !state.field.p2Hazards.stealthRock) {
+      const genNum = getGenNumber(state.format);
+      const dex = Dex.forGen(genNum);
+
+      if (moveId === 'stealthrock' && genNum >= 4 && !state.field.p2Hazards.stealthRock) {
         score += 35;
         breakdown.push(`Set Stealth Rock: +35`);
       }
-      if (moveId === 'spikes' && state.field.p2Hazards.spikes < 3) {
+      const maxSpikes = genNum === 2 ? 1 : 3;
+      if (moveId === 'spikes' && genNum >= 2 && state.field.p2Hazards.spikes < maxSpikes) {
         score += 20;
         breakdown.push(`Set Spikes: +20`);
+      }
+
+      // Gen 1 mechanics
+      if (genNum === 1) {
+        // Hyper Beam in Gen 1 has no recharge turn if it scores a KO!
+        if (moveId === 'hyperbeam') {
+          if (evalData.koProbability >= 0.85) {
+            score += 50;
+            breakdown.push(`Gen 1 Hyper Beam lethal strike (no recharge on KO): +50`);
+          } else {
+            score -= 20;
+            breakdown.push(`Gen 1 Hyper Beam without guaranteed KO risks recharge turn: -20`);
+          }
+        }
+        // Partial Trapping moves (Wrap, Bind, Fire Spin, Clamp) completely immobilize opponent if faster
+        if (['wrap', 'bind', 'firespin', 'clamp'].includes(moveId) && evalData.outspeeds === true) {
+          score += 45;
+          breakdown.push(`Gen 1 Partial Trapping immobilizes opponent while faster: +45`);
+        }
+        // High Critical-Hit moves in Gen 1 (~8x crit rate based on base Speed)
+        if (['slash', 'crabhammer', 'razorleaf', 'karatechop'].includes(moveId)) {
+          score += 25;
+          breakdown.push(`Gen 1 High-Crit move (~8x Speed crit rate): +25`);
+        }
       }
 
       // Stat setup moves
@@ -159,7 +187,7 @@ export class BaselineEngine {
         }
       }
 
-      // Healing moves (essential across all gens, especially GSC Gen 2)
+      // Healing moves (essential across all gens, especially GSC Gen 2 sustain metagame)
       if (['recover', 'roost', 'slackoff', 'softboiled', 'milkdrink', 'rest', 'synthesis', 'morningsun', 'moonlight', 'strengthsap', 'wish'].includes(moveId)) {
         if (p1Active) {
           if (evalData.opponentThreatensKO) {
@@ -169,37 +197,45 @@ export class BaselineEngine {
             score += 65;
             breakdown.push(`Critical recovery at low HP (<50%): +65`);
           } else if (p1Active.hpPercent < 75) {
-            score += 30;
-            breakdown.push(`Sustain recovery at medium HP (<75%): +30`);
+            const gen2Bonus = genNum === 2 ? 15 : 0;
+            score += 30 + gen2Bonus;
+            breakdown.push(`Sustain recovery at medium HP (<75%): +${30 + gen2Bonus}`);
           }
         }
       }
 
-      // Crippling status affliction with type immunity checks
+      // Crippling status affliction with generation-accurate type immunity checks
       if (['willowisp', 'thunderwave', 'toxic', 'glare', 'spore', 'sleeppowder', 'yawn'].includes(moveId)) {
         if (p2Active) {
-          const genNum = getGenNumber(state.format);
-          const dex = Dex.forGen(genNum);
           const oppSpecies = dex.species.get(p2Active.species);
           const oppTypes = p2Active.terastallized && p2Active.teraType
             ? [p2Active.teraType]
             : (oppSpecies?.types || []);
 
+          // In Gen 6+, Electric is immune to paralysis. In Gen 1-5, only Ground is immune.
+          const isImmuneToTwave = oppTypes.includes('Ground') || (genNum >= 6 && oppTypes.includes('Electric'));
+          // In Gen 6+, Grass is immune to powder/spore moves.
+          const isImmuneToSpore = genNum >= 6 && oppTypes.includes('Grass') && ['spore', 'sleeppowder'].includes(moveId);
+
           if (p2Active.status) {
             score -= 50;
             breakdown.push(`Opponent already has status (${p2Active.status}): -50`);
-          } else if (moveId === 'thunderwave' && (oppTypes.includes('Ground') || oppTypes.includes('Electric'))) {
+          } else if (moveId === 'thunderwave' && isImmuneToTwave) {
             score -= 100;
-            breakdown.push(`Immune: Ground/Electric immune to Thunder Wave: -100`);
-          } else if (moveId === 'toxic' && (oppTypes.includes('Poison') || oppTypes.includes('Steel'))) {
+            breakdown.push(`Immune: Target immune to Thunder Wave: -100`);
+          } else if (moveId === 'toxic' && (oppTypes.includes('Poison') || (genNum >= 2 && oppTypes.includes('Steel')))) {
             score -= 100;
             breakdown.push(`Immune: Poison/Steel immune to Toxic: -100`);
           } else if (moveId === 'willowisp' && oppTypes.includes('Fire')) {
             score -= 100;
             breakdown.push(`Immune: Fire type immune to burn: -100`);
+          } else if (isImmuneToSpore) {
+            score -= 100;
+            breakdown.push(`Immune: Grass type immune to powder/spore moves (Gen 6+): -100`);
           } else {
-            score += 40;
-            breakdown.push(`Inflict crippling status condition: +40`);
+            const sleepBonus = genNum === 1 && ['spore', 'sleeppowder'].includes(moveId) ? 20 : 0;
+            score += 40 + sleepBonus;
+            breakdown.push(`Inflict crippling status condition: +${40 + sleepBonus}`);
           }
         }
       }

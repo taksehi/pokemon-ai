@@ -14,11 +14,15 @@ export interface ModelEvalOptions {
   thresholdWinRate?: number; // e.g. 52.0
   reportJsonPath?: string;
   seedBase?: number;
+  formatid?: string;
+  formats?: string[];
+  outputComparisonDir?: string;
 }
 
 export interface ModelComparisonReport {
   timestamp: string;
   formatid: string;
+  formatsEvaluated?: string[];
   oldModelVersion: string;
   oldModelPath: string;
   newModelVersion: string;
@@ -45,17 +49,18 @@ export class ModelEvaluator {
   public static async playSingleGame(
     modelP1: NeuralValueModel,
     modelP2: NeuralValueModel,
-    seed: [number, number, number, number]
+    seed: [number, number, number, number],
+    formatid: string = 'gen9randombattle'
   ): Promise<{ winner: 'p1' | 'p2' | 'tie'; turns: number }> {
     const runner = new BattleRunner();
-    const p1Tracker = new StateTracker('gen9randombattle');
+    const p1Tracker = new StateTracker(formatid);
     p1Tracker.playerSlot = 'p1';
 
-    const p2Tracker = new StateTracker('gen9randombattle');
+    const p2Tracker = new StateTracker(formatid);
     p2Tracker.playerSlot = 'p2';
 
     await runner.start({
-      formatid: 'gen9randombattle',
+      formatid,
       p1Name: 'P1_Agent',
       p2Name: 'P2_Agent',
       seed,
@@ -103,7 +108,12 @@ export class ModelEvaluator {
     const numRounds = options.numRounds ?? 10; // Total 2 * numRounds games (symmetrical P1/P2)
     const thresholdWinRate = options.thresholdWinRate ?? 52.0;
     const seedBase = options.seedBase ?? 750000; // Strictly held-out seeds
-    const formatid = 'gen9randombattle';
+    const formats = options.formats && options.formats.length > 0
+      ? options.formats
+      : options.formatid
+      ? [options.formatid]
+      : ['gen9randombattle'];
+    const formatid = formats.length === 1 ? formats[0] : 'all-generations (gen1-9)';
 
     const oldModel = NeuralValueModel.loadFromFile(options.oldModelPath);
     const newModel = NeuralValueModel.loadFromFile(options.newModelPath);
@@ -119,17 +129,18 @@ export class ModelEvaluator {
     let draws = 0;
 
     for (let r = 0; r < numRounds; r++) {
+      const activeFormat = formats[r % formats.length];
       const seedVal = seedBase + r * 100;
       const seed: [number, number, number, number] = [seedVal, seedVal + 1, seedVal + 2, seedVal + 3];
 
       // Game A: New Model = P1, Old Model = P2
-      const gameA = await this.playSingleGame(newModel, oldModel, seed);
+      const gameA = await this.playSingleGame(newModel, oldModel, seed, activeFormat);
       if (gameA.winner === 'p1') newModelWins++;
       else if (gameA.winner === 'p2') oldModelWins++;
       else draws++;
 
       // Game B: Old Model = P1, New Model = P2 (Mirrored for strict fairness)
-      const gameB = await this.playSingleGame(oldModel, newModel, seed);
+      const gameB = await this.playSingleGame(oldModel, newModel, seed, activeFormat);
       if (gameB.winner === 'p2') newModelWins++;
       else if (gameB.winner === 'p1') oldModelWins++;
       else draws++;
@@ -160,6 +171,7 @@ export class ModelEvaluator {
     const report: ModelComparisonReport = {
       timestamp: new Date().toISOString(),
       formatid,
+      formatsEvaluated: formats,
       oldModelVersion: oldVersion,
       oldModelPath: options.oldModelPath,
       newModelVersion: newVersion,

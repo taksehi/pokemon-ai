@@ -9,6 +9,7 @@
     "live:ladder": "tsx src/connect-live.ts --ladder",
     "live:loop": "tsx src/live-loop.ts",
     "autonomous": "tsx src/autonomous-runner.ts",
+    "train:all-gens": "tsx src/train-all-gens.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc"

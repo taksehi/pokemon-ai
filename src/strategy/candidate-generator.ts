@@ -659,6 +659,10 @@ export class CandidateGenerator {
     const species = dex.species.get(speciesName);
     if (!species) return true;
     if (species.types.includes('Flying')) return false;
+    if (dex.gen >= 3 && species.abilities) {
+      const abilities = Object.values(species.abilities);
+      if (abilities.includes('Levitate')) return false;
+    }
     return true;
   }
 
