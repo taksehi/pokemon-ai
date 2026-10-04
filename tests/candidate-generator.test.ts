@@ -229,6 +229,7 @@ describe('Loop 3: CandidateGenerator & Deterministic Damage Evaluation', () => {
       '|turn|1',
       '|switch|p1a: Weavile|Weavile, L100, M|35/100',
       '|switch|p2a: Iron Valiant|Iron Valiant, L100|100/100',
+      '|-boost|p2a: Iron Valiant|spe|1',
       '|move|p2a: Iron Valiant|Close Combat|p1a: Weavile|[still]'
     ];
     tracker.processLines(lines);

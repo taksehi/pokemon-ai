@@ -52,6 +52,9 @@ export class BaselineEngine {
     const isForcedSwitch = Boolean(request.forceSwitch && request.forceSwitch[0]);
     const p1Active = state.p1.active;
     const p2Active = state.p2.active;
+    const oppIsBoosted = Boolean(
+      p2Active && (p2Active.boosts.atk >= 1 || p2Active.boosts.spa >= 1 || p2Active.boosts.spe >= 1)
+    );
 
     if (candidate.type === 'move') {
       const evalData = candidate.evaluation;
@@ -169,21 +172,56 @@ export class BaselineEngine {
         }
       }
 
-      // Stat setup moves
-      if (['swordsdance', 'nastyplot', 'calmmind', 'quiverdance', 'dragondance'].includes(moveId)) {
+      // Opponent Setup Sweeper Detection & Neutralization (Primary Human Loss Counter)
+      if (oppIsBoosted) {
+        // Phazing / Stat clearing moves completely eliminate opponent setup
+        if (['haze', 'clearsmog', 'roar', 'whirlwind', 'dragontail', 'yawn'].includes(moveId)) {
+          score += 80;
+          breakdown.push(`Neutralize opponent setup sweeper (${moveId}): +80`);
+        }
+        // Revenge-kill with priority moves before the boosted sweeper can strike
+        if (evalData.priority > 0) {
+          score += 45;
+          breakdown.push(`Priority counter against boosted sweeper: +45`);
+        }
+        // Crippling status severely diminishes setup sweeper threat
+        if (['willowisp', 'thunderwave', 'glare', 'spore'].includes(moveId) && !p2Active?.status) {
+          score += 55;
+          breakdown.push(`Status cripples boosted sweeper: +55`);
+        }
+      }
+
+      // Comprehensive competitive stat setup moves
+      const competitiveSetupMoves = [
+        'swordsdance', 'nastyplot', 'calmmind', 'quiverdance', 'dragondance',
+        'shellsmash', 'bulkup', 'curse', 'shiftgear', 'tidyup', 'agility',
+        'rockpolish', 'autotomize', 'tailglow', 'geomancy', 'victorydance',
+        'clangaroussoul', 'filletaway', 'coil', 'honeclaws', 'bellydrum'
+      ];
+
+      if (competitiveSetupMoves.includes(moveId)) {
         if (evalData.opponentThreatensKO) {
           score -= 60;
           breakdown.push(`Cannot setup under lethal KO threat: -60`);
         } else if (p1Active) {
-          const isAtkSetup = moveId === 'swordsdance' || moveId === 'dragondance';
-          const isSpaSetup = moveId === 'nastyplot' || moveId === 'calmmind' || moveId === 'quiverdance';
-          if ((isAtkSetup && p1Active.boosts.atk >= 4) || (isSpaSetup && p1Active.boosts.spa >= 4)) {
+          const totalBoosts = p1Active.boosts.atk + p1Active.boosts.spa + p1Active.boosts.spe;
+          if (totalBoosts >= 4) {
             score -= 60;
             breakdown.push(`Stat boost already saturated (>= +4): -60`);
-          } else if (p1Active.hpPercent > 70) {
-            score += 30;
-            breakdown.push(`Setup move with high HP: +30`);
+          } else if (p1Active.hpPercent > 65) {
+            score += 45;
+            breakdown.push(`Competitive setup move with safe HP: +45`);
           }
+        }
+      }
+
+      // Pivot moves exploit predicted human switches to seize permanent momentum
+      const pivotMoves = ['uturn', 'voltswitch', 'flipturn', 'partingshot', 'shedtail', 'chillyreception'];
+      if (pivotMoves.includes(moveId)) {
+        const activeMatchup = CandidateGenerator.evaluateActiveMatchup(state);
+        if (!activeMatchup.isUnfavorable && (evalData.maxDamagePercent > 30 || (p2Active && p2Active.hpPercent < 50))) {
+          score += 35;
+          breakdown.push(`Pivot momentum on predicted human switch (${moveId}): +35`);
         }
       }
 
@@ -194,12 +232,12 @@ export class BaselineEngine {
             score -= 40;
             breakdown.push(`Healing insufficient against lethal attack: -40`);
           } else if (p1Active.hpPercent < 50) {
-            score += 65;
-            breakdown.push(`Critical recovery at low HP (<50%): +65`);
+            score += 70;
+            breakdown.push(`Critical recovery at low HP (<50%): +70`);
           } else if (p1Active.hpPercent < 75) {
             const gen2Bonus = genNum === 2 ? 15 : 0;
-            score += 30 + gen2Bonus;
-            breakdown.push(`Sustain recovery at medium HP (<75%): +${30 + gen2Bonus}`);
+            score += 35 + gen2Bonus;
+            breakdown.push(`Sustain recovery at medium HP (<75%): +${35 + gen2Bonus}`);
           }
         }
       }
@@ -241,26 +279,43 @@ export class BaselineEngine {
       }
 
       // Entry hazard removal
-      if (['rapidspin', 'defog', 'mortalspin', 'courtchange'].includes(moveId)) {
+      if (['rapidspin', 'defog', 'mortalspin', 'courtchange', 'tidyup'].includes(moveId)) {
         const hazardCount =
           (state.field.p1Hazards.stealthRock ? 1 : 0) +
           state.field.p1Hazards.spikes +
           state.field.p1Hazards.toxicSpikes;
         if (hazardCount > 0) {
-          score += hazardCount * 25;
-          breakdown.push(`Hazard removal (${hazardCount} hazards): +${hazardCount * 25}`);
+          score += hazardCount * 30;
+          breakdown.push(`Hazard removal (${hazardCount} hazards): +${hazardCount * 30}`);
         }
       }
 
       // 5. Terastallization penalty (conserve Tera unless it secures high damage / KO)
       if (candidate.terastallize) {
         if (evalData.koProbability > 0.5) {
-          score += 15;
-          breakdown.push(`Tera secures lethal KO: +15`);
+          score += 20;
+          breakdown.push(`Tera secures lethal KO: +20`);
         } else {
           score -= 20;
           breakdown.push(`Conserve Tera: -20`);
         }
+      }
+
+      // 6. Dynamax scoring (Gen 8 Game-Winning Dynamic)
+      if (candidate.dynamax) {
+        if (p1Active && p1Active.hpPercent > 50 && (!evalData.opponentThreatensKO || evalData.maxDamagePercent > 40)) {
+          score += 45;
+          breakdown.push(`Gen 8 Dynamax activation doubles HP and unlocks Max Moves: +45`);
+        } else {
+          score -= 15;
+          breakdown.push(`Conserve Dynamax on weakened active Pokémon: -15`);
+        }
+      }
+
+      // 7. Mega Evolution scoring (Gen 6/7 Free Stat Boost)
+      if (candidate.mega) {
+        score += 35;
+        breakdown.push(`Mega Evolution provides immediate +100 stat boost: +35`);
       }
     } else if (candidate.type === 'switch') {
       const evalData = candidate.evaluation;
@@ -382,6 +437,12 @@ export class BaselineEngine {
               breakdown.push(`Emergency pivot under threat: +10`);
             }
           }
+        }
+
+        // Do not pivot into boosted sweepers if the switch-in takes huge damage
+        if (oppIsBoosted && (evalData.incomingMaxDamagePercent ?? 0) > 60) {
+          score -= 50;
+          breakdown.push(`Cannot safely pivot into boosted opponent (+${p2Active?.boosts.atk || p2Active?.boosts.spa}): -50`);
         }
       }
     }

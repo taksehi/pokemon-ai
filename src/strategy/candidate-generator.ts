@@ -32,6 +32,8 @@ export interface EvaluatedCandidateAction {
   name: string; // e.g. "Shadow Ball" or "Gholdengo"
   slot: number; // 1-based index
   terastallize?: boolean;
+  dynamax?: boolean;
+  mega?: boolean;
   evaluation: CandidateEvaluation;
 }
 
@@ -53,6 +55,8 @@ export class CandidateGenerator {
       const activeInfo = request.active[0];
       const moves = activeInfo.moves;
       const canTera = Boolean(activeInfo.canTerastallize);
+      const canDynamax = Boolean((activeInfo as any).canDynamax);
+      const canMegaEvo = Boolean((activeInfo as any).canMegaEvo);
 
       moves.forEach((m, idx) => {
         const slot = idx + 1;
@@ -82,6 +86,36 @@ export class CandidateGenerator {
             slot,
             terastallize: true,
             evaluation: teraEval
+          });
+        }
+
+        // Dynamax variant (Gen 8 mechanics)
+        if (canDynamax) {
+          const dmaxEval = this.evaluateMove(state, m.id, false);
+          candidates.push({
+            id: `move ${slot} dynamax`,
+            type: 'move',
+            choice: m.id,
+            name: `${m.move} [Dynamax]`,
+            slot,
+            terastallize: false,
+            dynamax: true,
+            evaluation: dmaxEval
+          });
+        }
+
+        // Mega Evolution variant (Gen 6/7 mechanics)
+        if (canMegaEvo) {
+          const megaEval = this.evaluateMove(state, m.id, false);
+          candidates.push({
+            id: `move ${slot} mega`,
+            type: 'move',
+            choice: m.id,
+            name: `${m.move} [Mega]`,
+            slot,
+            terastallize: false,
+            mega: true,
+            evaluation: megaEval
           });
         }
       });
@@ -588,14 +622,20 @@ export class CandidateGenerator {
       }
     }
 
-    // Speed comparison
+    // Speed comparison (calculate actual level-scaled stats instead of raw base stats)
+    const targetBaseAtLevel = Math.floor(((2 * targetSpeciesData.baseStats.spe + 31 + 21) * targetLevel) / 100 + 5);
     const targetSpe = targetBoosts
-      ? this.calculateEffectiveSpeed(targetSpeciesData.baseStats.spe, targetBoosts.spe)
-      : targetSpeciesData.baseStats.spe;
+      ? this.calculateEffectiveSpeed(targetBaseAtLevel, targetBoosts.spe, targetItem, undefined, genNum)
+      : this.calculateEffectiveSpeed(targetBaseAtLevel, 0, targetItem, undefined, genNum);
+
     const oppBaseSpeed = dex.species.get(p2Active.species)?.baseStats.spe || 100;
+    const oppBaseAtLevel = Math.floor(((2 * oppBaseSpeed + 31 + 21) * p2Active.level) / 100 + 5);
     const oppSpe = this.calculateEffectiveSpeed(
-      Math.floor(((2 * oppBaseSpeed + 31 + 21) * p2Active.level) / 100 + 5),
-      p2Active.boosts.spe
+      oppBaseAtLevel,
+      p2Active.boosts.spe,
+      p2Active.revealedItem ?? undefined,
+      p2Active.status ?? undefined,
+      genNum
     );
     const opponentOutspeeds = oppSpe >= targetSpe;
     const opponentThreatensKO =
@@ -627,14 +667,33 @@ export class CandidateGenerator {
     return mult;
   }
 
-  private static calculateEffectiveSpeed(baseSpeed: number, boost: number): number {
+  private static calculateEffectiveSpeed(
+    statSpeed: number,
+    boost: number,
+    item?: string,
+    status?: string,
+    genNum: number = 9
+  ): number {
     const multiplier =
       boost > 0
         ? (2 + boost) / 2
         : boost < 0
         ? 2 / (2 - boost)
         : 1;
-    return Math.floor(baseSpeed * multiplier);
+    let spe = Math.floor(statSpeed * multiplier);
+
+    const cleanItem = item?.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanItem === 'choicescarf') {
+      spe = Math.floor(spe * 1.5);
+    } else if (cleanItem === 'ironball' || cleanItem === 'machobrace') {
+      spe = Math.floor(spe * 0.5);
+    }
+
+    if (status === 'par') {
+      spe = Math.floor(spe * (genNum >= 7 ? 0.5 : 0.25));
+    }
+
+    return spe;
   }
 
   private static getRockEffectiveness(speciesName: string, dex: ReturnType<typeof Dex.forGen>): number {
