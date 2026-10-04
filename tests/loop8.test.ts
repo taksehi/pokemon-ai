@@ -31,5 +31,10 @@ describe('LOOP 8: Autonomous Training Cycle', () => {
       const loaded = NeuralValueModel.loadFromFile(iter.modelPath);
       expect(loaded.metadata.version).toBe(iter.versionId);
     }
+
+    // Clean up test file and reset registry
+    const testFile = path.resolve(process.cwd(), 'data', 'models', 'test_loop8_active_model.json');
+    if (fs.existsSync(testFile)) fs.unlinkSync(testFile);
+    ModelRegistry.setRegistryPath(path.resolve(process.cwd(), 'data', 'models', 'active_model.json'));
   }, 60000);
 });

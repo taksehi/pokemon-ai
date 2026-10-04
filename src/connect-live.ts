@@ -38,7 +38,9 @@ async function main() {
   const username = (process.env.SHOWDOWN_USERNAME && process.env.SHOWDOWN_USERNAME.toLowerCase() === rawUsername.toLowerCase())
     ? process.env.SHOWDOWN_USERNAME
     : rawUsername;
-  const password = process.env.SHOWDOWN_PASSWORD || '';
+  const password = (process.env.SHOWDOWN_USERNAME && process.env.SHOWDOWN_USERNAME.toLowerCase() === username.toLowerCase())
+    ? (process.env.SHOWDOWN_PASSWORD || '')
+    : '';
   const is1v1 = process.argv.includes('--1v1') || process.argv.includes('--no-ladder') || process.argv.includes('--listen');
   const targetOpponent = is1v1 ? undefined : (process.env.SHOWDOWN_OPPONENT || positionalArgs[1]);
   const isLadder = !is1v1 && !targetOpponent && (
@@ -49,12 +51,11 @@ async function main() {
   const formatArg = process.argv.find(arg => arg.startsWith('--format='));
   const genFlag = process.argv.find(arg => /^--gen[1-9]$/i.test(arg));
   const format =
-    process.env.SHOWDOWN_FORMAT ||
     (formatArg
       ? formatArg.split('=')[1]
       : genFlag
       ? `gen${genFlag.slice(5)}randombattle`
-      : 'gen9randombattle');
+      : process.env.SHOWDOWN_FORMAT || 'gen9randombattle');
   const serverUrl = process.env.SHOWDOWN_SERVER || 'wss://sim3.psim.us/showdown/websocket';
   const mode = process.argv.includes('--jev')
     ? 'jev'

@@ -11,15 +11,33 @@ export interface PlayerDecisionResult {
   decision: AgentDecision | null;
   usedFallback: boolean;
   rationale: string;
+  fallbackCount?: number;
+  fallbackRate?: number;
 }
 
 export class AIStrategyPlayer {
   private llmClient: LLMClient;
   private timeoutMs: number;
+  private totalDecisions: number = 0;
+  private fallbackCount: number = 0;
 
   constructor(llmClient: LLMClient, options: { timeoutMs?: number } = {}) {
     this.llmClient = llmClient;
     this.timeoutMs = options.timeoutMs ?? 4000;
+  }
+
+  public getStats(): { totalDecisions: number; fallbackCount: number; fallbackRate: number } {
+    const fallbackRate = this.totalDecisions > 0 ? Number((this.fallbackCount / this.totalDecisions).toFixed(4)) : 0;
+    return {
+      totalDecisions: this.totalDecisions,
+      fallbackCount: this.fallbackCount,
+      fallbackRate
+    };
+  }
+
+  public resetStats(): void {
+    this.totalDecisions = 0;
+    this.fallbackCount = 0;
   }
 
   /**
@@ -29,6 +47,7 @@ export class AIStrategyPlayer {
     state: BattleState,
     request: RequestPayload
   ): Promise<PlayerDecisionResult> {
+    this.totalDecisions++;
     const candidates = CandidateGenerator.generateCandidates(state, request);
     if (candidates.length === 0) {
       throw new Error('No legal candidate actions found in current state');
@@ -67,9 +86,12 @@ export class AIStrategyPlayer {
         candidate: matchedCandidate,
         decision: validatedDecision,
         usedFallback: false,
-        rationale: validatedDecision.strategic_rationale
+        rationale: validatedDecision.strategic_rationale,
+        fallbackCount: this.fallbackCount,
+        fallbackRate: this.totalDecisions > 0 ? Number((this.fallbackCount / this.totalDecisions).toFixed(4)) : 0
       };
     } catch (err: any) {
+      this.fallbackCount++;
       const fallbackReason = err?.message || String(err);
       // Hard deterministic fallback
       const fallback: ScoredCandidateAction = BaselineEngine.selectBestAction(state, request);
@@ -78,7 +100,9 @@ export class AIStrategyPlayer {
         candidate: fallback.candidate,
         decision: null,
         usedFallback: true,
-        rationale: `[SAFETY FALLBACK] ${fallbackReason} | Selected: ${fallback.candidate.name} (Score: ${fallback.score})`
+        rationale: `[SAFETY FALLBACK] ${fallbackReason} | Selected: ${fallback.candidate.name} (Score: ${fallback.score})`,
+        fallbackCount: this.fallbackCount,
+        fallbackRate: this.totalDecisions > 0 ? Number((this.fallbackCount / this.totalDecisions).toFixed(4)) : 0
       };
     }
   }
